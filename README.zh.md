@@ -35,23 +35,6 @@ App 会：
 书名只需在「书籍」里描述一次（书名/作者/年份），写到哪由「目的地」决定。
 把正在读的几本书在设置里一次加好，之后分享就是点两下芯片。
 
-## 构建与安装
-
-这台机器上 `PATH` 里没有 `java` / `gradle` / `adb`，要用绝对路径：
-
-```bash
-export JAVA_HOME="D:/DevEnv/AndroidStudioMy/jbr"
-./gradlew :app:testDebugUnitTest          # 42 个纯逻辑单测，不需要设备
-./gradlew :app:assembleDebug
-"$LOCALAPPDATA/Android/Sdk/platform-tools/adb.exe" install -r app/build/outputs/apk/debug/app-debug.apk
-```
-
-版本矩阵锁定在本机 Gradle 缓存里已有的组合（AGP 8.2.2 / Kotlin 1.9.22 /
-Compose 1.5.10 / compileSdk 34），干净构建不需要下载任何新依赖。
-
-**安装被拒（`INSTALL_FAILED_USER_RESTRICTED`）** 是 HyperOS 的 USB 安装确认弹窗
-没点到，不是包坏了 —— 重跑一次并留意手机屏幕。
-
 ## 使用
 
 从任意 App 分享一段文字，或用文本选择菜单里的「处理文本」，选「拾曜Obsiclip」。
@@ -152,6 +135,23 @@ Kindle 在阅读界面**禁止选择长段落** —— 所以整段分享和复�
 - 历史记录按目标 / 来源筛选
 - 规则的可视化预览（拿一段真实分享文本试跑，看每步删了什么）
 - 批量导入 Amazon Notebook 网页导出的划线
+
+## 构建与安装
+
+这台机器上 `PATH` 里没有 `java` / `gradle` / `adb`，要用绝对路径：
+
+```bash
+export JAVA_HOME="D:/DevEnv/AndroidStudioMy/jbr"
+./gradlew :app:testDebugUnitTest          # 42 个纯逻辑单测，不需要设备
+./gradlew :app:assembleDebug
+"$LOCALAPPDATA/Android/Sdk/platform-tools/adb.exe" install -r app/build/outputs/apk/debug/app-debug.apk
+```
+
+版本矩阵锁定在本机 Gradle 缓存里已有的组合（AGP 8.2.2 / Kotlin 1.9.22 /
+Compose 1.5.10 / compileSdk 34），干净构建不需要下载任何新依赖。
+
+**安装被拒（`INSTALL_FAILED_USER_RESTRICTED`）** 是 HyperOS 的 USB 安装确认弹窗
+没点到，不是包坏了 —— 重跑一次并留意手机屏幕。
 
 ## 许可
 

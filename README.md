@@ -35,16 +35,6 @@ until it misreads one, and files a highlight into a brand new note beside the on
 belongs in. So destination and book are chosen separately: describe a book once (title,
 author, year) and let the destination decide where it goes.
 
-## Build
-
-```bash
-export JAVA_HOME="/path/to/Android Studio/jbr"
-./gradlew :app:testDebugUnitTest     # 42 pure-logic tests, no device needed
-./gradlew :app:assembleDebug
-```
-
-Pinned to AGP 8.2.2 / Kotlin 1.9.22 / Compose 1.5.10 / compileSdk 34 / minSdk 26.
-
 ## Use
 
 Share text from any app, or pick this app from the「Process text」entry in the text-selection
@@ -137,6 +127,16 @@ Sections fold away behind their titles, all collapsed by default.
 > handled by starting the app — so there is no way to write without it appearing. To go back
 > where you came from, turn on "return to the source app": it uses Obsidian's `x-success`
 > callback, which fires once the write is done.
+
+## Build
+
+```bash
+export JAVA_HOME="/path/to/Android Studio/jbr"
+./gradlew :app:testDebugUnitTest     # 42 pure-logic tests, no device needed
+./gradlew :app:assembleDebug
+```
+
+Pinned to AGP 8.2.2 / Kotlin 1.9.22 / Compose 1.5.10 / compileSdk 34 / minSdk 26.
 
 ## License
 
