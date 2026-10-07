@@ -21,7 +21,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.duzui.sharetoobsi.R
 import com.duzui.sharetoobsi.TargetDraft
 import com.duzui.sharetoobsi.data.FormatEntity
 import com.duzui.sharetoobsi.data.TargetEntity
@@ -47,11 +49,17 @@ fun AddTargetDialog(
     var formatId by remember { mutableStateOf(existing?.formatId) }
     var formatMenu by remember { mutableStateOf(false) }
 
-    val formatLabel = formats.firstOrNull { it.id == formatId }?.name ?: "默认格式"
+    val formatLabel = formats.firstOrNull { it.id == formatId }?.name ?: stringResource(R.string.add_target_format_label)
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (existing == null) "添加目标" else "编辑目标") },
+        title = {
+            Text(
+                stringResource(
+                    if (existing == null) R.string.add_target_new else R.string.add_target_edit
+                )
+            )
+        },
         text = {
             Column(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
@@ -60,17 +68,17 @@ fun AddTargetDialog(
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("名称") },
-                    supportingText = { Text("只是芯片上显示的名字") },
+                    label = { Text(stringResource(R.string.field_name)) },
+                    supportingText = { Text(stringResource(R.string.add_target_name_hint)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 OutlinedTextField(
                     value = path,
                     onValueChange = { path = it },
-                    label = { Text("笔记路径") },
+                    label = { Text(stringResource(R.string.add_target_path)) },
                     supportingText = {
-                        Text("可用 {title} {author} {year} {date}，由选中的书填写")
+                        Text(stringResource(R.string.add_target_path_hint))
                     },
                     minLines = 2,
                     modifier = Modifier.fillMaxWidth(),
@@ -78,18 +86,18 @@ fun AddTargetDialog(
                 OutlinedTextField(
                     value = heading,
                     onValueChange = { heading = it },
-                    label = { Text("插入到哪个小节") },
-                    supportingText = { Text("留空则追加到文件末尾") },
+                    label = { Text(stringResource(R.string.add_target_section)) },
+                    supportingText = { Text(stringResource(R.string.add_target_section_hint)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("默认输出格式", modifier = Modifier.weight(1f))
+                    Text(stringResource(R.string.add_target_format_label), modifier = Modifier.weight(1f))
                     OutlinedButton(onClick = { formatMenu = true }) { Text(formatLabel) }
                     DropdownMenu(expanded = formatMenu, onDismissRequest = { formatMenu = false }) {
                         DropdownMenuItem(
-                            text = { Text("默认格式") },
+                            text = { Text(stringResource(R.string.add_target_format_label)) },
                             onClick = {
                                 formatId = null
                                 formatMenu = false
@@ -108,7 +116,7 @@ fun AddTargetDialog(
                 }
                 if (formats.isEmpty()) {
                     Text(
-                        "还没有别的格式。可以在设置的「输出格式」里新建。",
+                        stringResource(R.string.add_target_no_formats),
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
@@ -128,10 +136,10 @@ fun AddTargetDialog(
                     )
                 },
                 enabled = name.isNotBlank() && path.isNotBlank(),
-            ) { Text("保存") }
+            ) { Text(stringResource(R.string.action_save)) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("取消") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
         },
     )
 }

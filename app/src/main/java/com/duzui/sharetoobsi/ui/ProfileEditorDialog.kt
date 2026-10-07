@@ -17,7 +17,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.duzui.sharetoobsi.R
 import com.duzui.sharetoobsi.data.ProfileEntity
 import com.duzui.sharetoobsi.domain.compileRules
 
@@ -54,22 +56,22 @@ fun ProfileEditorDialog(
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("名称") },
+                    label = { Text(stringResource(R.string.field_name)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
 
                 RulesField(
-                    label = "删除整行的规则",
-                    hint = "匹配到的整行会被删掉，每行一条正则",
+                    label = stringResource(R.string.profile_drop_lines),
+                    hint = stringResource(R.string.profile_drop_lines_hint),
                     value = lineRules,
                     onValueChange = { lineRules = it },
                     invalid = invalidLines,
                 )
 
                 RulesField(
-                    label = "行内删除的规则",
-                    hint = "匹配到的部分会被删掉，保留该行其余内容",
+                    label = stringResource(R.string.profile_inline),
+                    hint = stringResource(R.string.profile_inline_hint),
                     value = inlineRules,
                     onValueChange = { inlineRules = it },
                     invalid = invalidInlines,
@@ -78,8 +80,8 @@ fun ProfileEditorDialog(
                 OutlinedTextField(
                     value = template,
                     onValueChange = { template = it },
-                    label = { Text("输出模板（可留空）") },
-                    supportingText = { Text("留空则用全局模板。占位符同全局。") },
+                    label = { Text(stringResource(R.string.profile_template)) },
+                    supportingText = { Text(stringResource(R.string.profile_template_hint)) },
                     placeholder = { Text(placeholderTemplate) },
                     minLines = 3,
                     modifier = Modifier.fillMaxWidth(),
@@ -90,10 +92,10 @@ fun ProfileEditorDialog(
             TextButton(
                 onClick = { onSave(existing?.id, name, lineRules, inlineRules, template) },
                 enabled = name.isNotBlank() && invalidLines.isEmpty() && invalidInlines.isEmpty(),
-            ) { Text("保存") }
+            ) { Text(stringResource(R.string.action_save)) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("取消") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
         },
     )
 }
@@ -120,7 +122,7 @@ private fun RulesField(
         )
         if (invalid.isNotEmpty()) {
             Text(
-                "这些正则不合法，保存前先修：" + invalid.joinToString("　"),
+                stringResource(R.string.profile_invalid) + invalid.joinToString("　"),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error,
             )

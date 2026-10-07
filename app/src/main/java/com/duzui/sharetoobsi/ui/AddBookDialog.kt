@@ -19,7 +19,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.duzui.sharetoobsi.R
 import com.duzui.sharetoobsi.BookDraft
 import com.duzui.sharetoobsi.data.BookEntity
 
@@ -44,6 +46,9 @@ fun AddBookDialog(
     var createSkeleton by remember { mutableStateOf(false) }
 
     val skeletonPath = if (createSkeleton) deriveSkeletonPath(title) else ""
+    // Hoisted: stringResource is composable, and these are read from a lambda.
+    val willWrite = stringResource(R.string.add_book_will_write)
+    val fillTitleFirst = stringResource(R.string.add_book_fill_title)
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -56,8 +61,8 @@ fun AddBookDialog(
                 OutlinedTextField(
                     value = title,
                     onValueChange = { title = it },
-                    label = { Text("书名") },
-                    supportingText = { Text("模板里的 {title}") },
+                    label = { Text(stringResource(R.string.add_book_title)) },
+                    supportingText = { Text(stringResource(R.string.add_book_title_hint)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -65,14 +70,14 @@ fun AddBookDialog(
                     OutlinedTextField(
                         value = author,
                         onValueChange = { author = it },
-                        label = { Text("作者") },
+                        label = { Text(stringResource(R.string.add_book_author)) },
                         singleLine = true,
                         modifier = Modifier.weight(1f),
                     )
                     OutlinedTextField(
                         value = year,
                         onValueChange = { year = it },
-                        label = { Text("年份") },
+                        label = { Text(stringResource(R.string.add_book_year)) },
                         singleLine = true,
                         modifier = Modifier.weight(1f),
                     )
@@ -83,7 +88,7 @@ fun AddBookDialog(
                         Column(modifier = Modifier.weight(1f)) {
                             Text("同时创建笔记骨架", style = MaterialTheme.typography.bodyMedium)
                             Text(
-                                "笔记还不存在时勾选。已存在的笔记勾了会重复写入 frontmatter。",
+                                stringResource(R.string.add_book_skeleton_hint),
                                 style = MaterialTheme.typography.bodySmall,
                             )
                         }
@@ -91,7 +96,7 @@ fun AddBookDialog(
                     }
                     if (createSkeleton) {
                         Text(
-                            "会写到：" + skeletonPath.ifBlank { "（先填书名）" },
+                            willWrite + skeletonPath.ifBlank { fillTitleFirst },
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.primary,
                         )
@@ -113,10 +118,10 @@ fun AddBookDialog(
                     )
                 },
                 enabled = title.isNotBlank(),
-            ) { Text("保存") }
+            ) { Text(stringResource(R.string.action_save)) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("取消") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
         },
     )
 }

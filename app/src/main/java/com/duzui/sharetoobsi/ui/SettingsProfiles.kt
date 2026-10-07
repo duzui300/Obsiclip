@@ -28,7 +28,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.duzui.sharetoobsi.R
 import com.duzui.sharetoobsi.AppEntry
 import com.duzui.sharetoobsi.data.ProfileEntity
 import com.duzui.sharetoobsi.domain.SourceProfile
@@ -60,13 +62,15 @@ fun RulesSection(
         )
     }
 
+    val lineRules = stringResource(R.string.profiles_line_rules)
+    val ownTemplate = stringResource(R.string.profiles_own_template)
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
-            "自己写规则：一行一条正则，匹配到的整行被删掉。「行内删除」只删匹配的部分。",
+            stringResource(R.string.profiles_own_hint),
             style = MaterialTheme.typography.bodySmall,
         )
         OutlinedButton(onClick = { creating = true }, modifier = Modifier.fillMaxWidth()) {
-            Text("新建规则")
+            Text(stringResource(R.string.profile_new))
         }
 
         userProfiles.forEach { profile ->
@@ -76,19 +80,19 @@ fun RulesSection(
                     Text(
                         buildString {
                             append(profile.lineRules.lines().count { it.isNotBlank() })
-                                .append(" 条整行规则")
+                                .append(lineRules)
                             val inline = profile.inlineRules.lines().count { it.isNotBlank() }
-                            if (inline > 0) append("　· ").append(inline).append(" 条行内规则")
-                            if (profile.template.isNotBlank()) append("　· 自带模板")
+                            if (inline > 0) append(stringResource(R.string.profiles_inline_rules, inline))
+                            if (profile.template.isNotBlank()) append(ownTemplate)
                         },
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
                 IconButton(onClick = { editing = profile }) {
-                    Icon(Icons.Filled.Edit, contentDescription = "编辑")
+                    Icon(Icons.Filled.Edit, contentDescription = stringResource(R.string.action_edit))
                 }
                 IconButton(onClick = { onDelete(profile) }) {
-                    Icon(Icons.Filled.Delete, contentDescription = "删除")
+                    Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.action_delete))
                 }
             }
         }
@@ -120,11 +124,11 @@ fun AppProfileSection(
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
-            "指定某个 App 固定用哪套规则。不指定时按包名自动匹配，认不出来就用默认规则。",
+            stringResource(R.string.profiles_app_hint),
             style = MaterialTheme.typography.bodySmall,
         )
         OutlinedButton(onClick = { picking = true }, modifier = Modifier.fillMaxWidth()) {
-            Text("添加 App")
+            Text(stringResource(R.string.profiles_add_app))
         }
 
         mappings.forEach { (packageName, profileId) ->
@@ -140,7 +144,7 @@ fun AppProfileSection(
                     onPick = { onSet(packageName, it.id) },
                 )
                 IconButton(onClick = { onClear(packageName) }) {
-                    Icon(Icons.Filled.Delete, contentDescription = "移除")
+                    Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.action_remove))
                 }
             }
         }
@@ -154,7 +158,7 @@ private fun ProfileDropdown(
     onPick: (SourceProfile) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
-    OutlinedButton(onClick = { expanded = true }) { Text(current?.label ?: "选择") }
+    OutlinedButton(onClick = { expanded = true }) { Text(current?.label ?: stringResource(R.string.action_choose)) }
     DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
         options.forEach { profile ->
             DropdownMenuItem(
@@ -188,18 +192,18 @@ private fun AppPickerDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("选择 App") },
+        title = { Text(stringResource(R.string.profiles_choose_app)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
                     value = query,
                     onValueChange = { query = it },
-                    label = { Text("搜索") },
+                    label = { Text(stringResource(R.string.action_search)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 if (filtered.isEmpty()) {
-                    Text("没有匹配的 App", style = MaterialTheme.typography.bodySmall)
+                    Text(stringResource(R.string.profiles_no_match), style = MaterialTheme.typography.bodySmall)
                 }
                 LazyColumn(
                     modifier = Modifier
@@ -220,6 +224,6 @@ private fun AppPickerDialog(
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("关闭") } },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_close)) } },
     )
 }

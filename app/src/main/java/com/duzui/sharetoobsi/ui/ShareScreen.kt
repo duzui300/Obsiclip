@@ -111,7 +111,7 @@ fun ShareScreen(
                 title = { Text(stringResource(R.string.app_name)) },
                 actions = {
                     IconButton(onClick = onOpenSettings) {
-                        Icon(Icons.Filled.Settings, contentDescription = "设置")
+                        Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.settings_title))
                     }
                 },
             )
@@ -282,8 +282,7 @@ private fun EmptyState(origin: String, onReadClipboard: () -> Unit) {
                 style = MaterialTheme.typography.bodyMedium,
             )
             Text(
-                "从别的 App 分享过来，或者在那里选中文字后「复制」，再读进来。\n" +
-                    "分享面板有长度限制的 App（比如 Kindle），走复制这条路更稳，也更干净。",
+                stringResource(R.string.share_empty_hint),
                 style = MaterialTheme.typography.bodySmall,
             )
             OutlinedButton(onClick = onReadClipboard, modifier = Modifier.fillMaxWidth()) {

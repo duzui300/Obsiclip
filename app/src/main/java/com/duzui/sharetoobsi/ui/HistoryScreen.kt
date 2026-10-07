@@ -24,7 +24,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.duzui.sharetoobsi.R
 import com.duzui.sharetoobsi.data.HistoryEntity
 import java.time.Instant
 import java.time.ZoneId
@@ -49,15 +51,15 @@ fun HistoryScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("发送历史") },
+                title = { Text(stringResource(R.string.history_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "返回")
+                        Icon(Icons.Filled.ArrowBack, contentDescription = stringResource(R.string.action_back))
                     }
                 },
                 actions = {
                     if (entries.isNotEmpty()) {
-                        TextButton(onClick = onClear) { Text("清空") }
+                        TextButton(onClick = onClear) { Text(stringResource(R.string.history_clear)) }
                     }
                 },
             )
@@ -70,7 +72,7 @@ fun HistoryScreen(
                     .padding(insets)
                     .padding(24.dp),
             ) {
-                Text("还没有发送记录。", style = MaterialTheme.typography.bodyLarge)
+                Text(stringResource(R.string.history_empty), style = MaterialTheme.typography.bodyLarge)
             }
             return@Scaffold
         }
@@ -112,7 +114,7 @@ fun HistoryScreen(
                         maxLines = 3,
                         overflow = TextOverflow.Ellipsis,
                     )
-                    OutlinedButton(onClick = { onResend(entry) }) { Text("重发") }
+                    OutlinedButton(onClick = { onResend(entry) }) { Text(stringResource(R.string.history_resend)) }
                 }
                 HorizontalDivider()
             }

@@ -26,7 +26,9 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.duzui.sharetoobsi.R
 import com.duzui.sharetoobsi.ImportEntry
 
 /**
@@ -52,10 +54,10 @@ fun ImportReviewScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("检查后写入") },
+                title = { Text(stringResource(R.string.import_review_title)) },
                 navigationIcon = {
                     IconButton(onClick = onDismiss) {
-                        Icon(Icons.Filled.Close, contentDescription = "放弃这次抓取")
+                        Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.import_review_discard))
                     }
                 },
             )
@@ -67,16 +69,16 @@ fun ImportReviewScreen(
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 Text(
-                    "读到 ${entries.size} 条，已勾选 $chosen 条",
+                    stringResource(R.string.import_review_summary, entries.size, chosen),
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 Text(targetPath, style = MaterialTheme.typography.bodySmall)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TextButton(onClick = { onSelectAll(true) }) { Text("全选可写的") }
-                    TextButton(onClick = { onSelectAll(false) }) { Text("全不选") }
+                    TextButton(onClick = { onSelectAll(true) }) { Text(stringResource(R.string.import_review_select_writable)) }
+                    TextButton(onClick = { onSelectAll(false) }) { Text(stringResource(R.string.import_review_select_none)) }
                 }
                 Text(
-                    "带标记的没有默认勾选：可能被 Kindle 折叠过、或者已经写过一次。",
+                    stringResource(R.string.import_review_note),
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
@@ -107,8 +109,8 @@ fun ImportReviewScreen(
                                 textStyle = MaterialTheme.typography.bodyMedium,
                             )
                             val note = when {
-                                entry.suspect -> "结尾像被截断了 —— 确认完整了再勾"
-                                entry.alreadyImported -> "这篇笔记里已经有了"
+                                entry.suspect -> stringResource(R.string.import_review_truncated)
+                                entry.alreadyImported -> stringResource(R.string.import_review_already)
                                 else -> null
                             }
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
