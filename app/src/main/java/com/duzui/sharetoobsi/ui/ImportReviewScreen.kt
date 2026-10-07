@@ -138,7 +138,7 @@ fun ImportReviewScreen(
                     .fillMaxWidth()
                     .padding(16.dp),
             ) {
-Text(
+                Text(
                     if (chosen > 0) stringResource(R.string.import_review_write, chosen)
                     else stringResource(R.string.import_review_write_none)
                 )

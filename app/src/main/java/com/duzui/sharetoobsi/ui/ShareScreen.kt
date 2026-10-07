@@ -42,6 +42,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.duzui.sharetoobsi.BookDraft
+import com.duzui.sharetoobsi.OriginKind
 import com.duzui.sharetoobsi.R
 import com.duzui.sharetoobsi.ShareUiState
 import com.duzui.sharetoobsi.TargetDraft
@@ -152,7 +153,7 @@ fun ShareScreen(
             )
 
             if (state.raw.isBlank()) {
-                EmptyState(state.origin, onReadClipboard)
+                EmptyState(originText(state), onReadClipboard)
             } else {
                 PayloadField(state, onPayloadEdit, onRegenerate, onReadClipboard)
             }
@@ -160,6 +161,20 @@ fun ShareScreen(
             SourcePicker(state, onProfileChange)
         }
     }
+}
+
+/**
+ * Says where the text came from. Built here rather than in the view model so it is written
+ * in the language that is current now, not the one that was current when the share arrived.
+ */
+@Composable
+private fun originText(state: ShareUiState): String = when (state.origin) {
+    OriginKind.None -> ""
+    OriginKind.Shared -> stringResource(
+        R.string.vm_shared_from,
+        state.sourcePackage ?: stringResource(R.string.vm_unknown_source),
+    )
+    OriginKind.Clipboard -> stringResource(R.string.vm_from_clipboard)
 }
 
 @Composable
@@ -322,7 +337,7 @@ private fun PayloadField(
             textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
         )
         Text(
-            stringResource(R.string.share_origin_chars, state.origin, state.raw.length),
+            stringResource(R.string.share_origin_chars, originText(state), state.raw.length),
             style = MaterialTheme.typography.bodySmall,
         )
     }

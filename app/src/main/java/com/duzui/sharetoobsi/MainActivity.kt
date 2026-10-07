@@ -16,6 +16,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.duzui.sharetoobsi.data.AppLanguage
+import com.duzui.sharetoobsi.data.LanguageStore
+import com.duzui.sharetoobsi.data.localizedContext
 import com.duzui.sharetoobsi.ui.HistoryScreen
 import com.duzui.sharetoobsi.ui.ImportReviewScreen
 import com.duzui.sharetoobsi.ui.SettingsScreen
@@ -51,9 +54,21 @@ class MainActivity : ComponentActivity() {
 
     private val container by lazy { AppContainer(this) }
 
+    /** The app's own language choice, mirrored into Compose so the settings row can show it. */
+    private var language by mutableStateOf(AppLanguage.System)
+
+    /**
+     * Runs before anything reads a resource, which is the only place an override can be
+     * installed and still catch every lookup in the activity.
+     */
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(localizedContext(newBase, LanguageStore.get(newBase)))
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        language = LanguageStore.get(this)
 
         if (isReturnCallback(intent)) {
             returnToSourceApp()
@@ -127,6 +142,15 @@ class MainActivity : ComponentActivity() {
                     Screen.Settings -> SettingsScreen(
                         state = state,
                         onBack = { screen = Screen.Share },
+                        language = language,
+                        onLanguage = { picked ->
+                            LanguageStore.set(this@MainActivity, picked)
+                            language = picked
+                            // The override is installed in attachBaseContext, so applying it
+                            // means going round again. The view model is retained, so the
+                            // text being captured survives the switch.
+                            recreate()
+                        },
                         onVault = viewModel::setVault,
                         onHeading = viewModel::setHeading,
                         onTemplate = viewModel::setTemplate,

@@ -40,13 +40,23 @@ import kotlinx.coroutines.withContext
 const val RETURN_CALLBACK = "sharetoobsi://return"
 
 /**
+ * Where the text on screen came from. Rendered into words by the screen, not here, so the
+ * answer can be given in whatever language is current.
+ */
+enum class OriginKind { None, Shared, Clipboard }
+
+/**
  * Derived values are computed once at construction rather than in `get()`, so one state
  * change costs one pass of the pipeline instead of one per recomposition.
  */
 data class ShareUiState(
     val raw: String = "",
-    /** Where the text came from, for display: a share, the clipboard, or nothing yet. */
-    val origin: String = "",
+    /**
+     * Where the text came from. A kind rather than a finished sentence: a sentence would be
+     * frozen in whichever language was active when the share arrived, and would stay frozen
+     * through a change of the app's language.
+     */
+    val origin: OriginKind = OriginKind.None,
     val sourcePackage: String? = null,
     val profile: SourceProfile = SourceProfiles.GENERIC,
     val settings: AppSettings = AppSettings(),
@@ -297,10 +307,7 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
         _state.update { current ->
             current.copy(
                 raw = share.text,
-                origin = str(
-                    R.string.vm_shared_from,
-                    share.sourcePackage ?: str(R.string.vm_unknown_source),
-                ),
+                origin = OriginKind.Shared,
                 sourcePackage = share.sourcePackage,
                 profile = resolveProfile(current, share.sourcePackage),
                 payloadOverride = null,
@@ -331,7 +338,7 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
         _state.update {
             it.copy(
                 raw = text,
-                origin = str(R.string.vm_from_clipboard),
+                origin = OriginKind.Clipboard,
                 sourcePackage = null,
                 payloadOverride = null,
             )

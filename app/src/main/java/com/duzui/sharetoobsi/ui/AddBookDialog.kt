@@ -52,7 +52,7 @@ fun AddBookDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-title = {
+        title = {
             Text(
                 stringResource(
                     if (existing == null) R.string.add_book_new else R.string.add_book_edit
@@ -92,7 +92,7 @@ title = {
                 if (existing == null) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(modifier = Modifier.weight(1f)) {
-Text(
+                            Text(
                                 stringResource(R.string.add_book_skeleton),
                                 style = MaterialTheme.typography.bodyMedium,
                             )

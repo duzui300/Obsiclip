@@ -86,6 +86,8 @@ domain/     pure Kotlin, no Android — the whole pipeline, covered by JVM tests
 send/       ObsidianSender: dispatch, clipboard fallback above 16k chars, failure kinds
             ShareShortcuts: pushes saved targets as Direct Share targets
 data/       Room (targets/books/formats/profiles/app_profiles/history/outbox) + DataStore
+            LanguageStore: the app-language choice, in SharedPreferences because
+            attachBaseContext has to read it before a DataStore flow can be collected
 ui/         Compose: ShareScreen, SettingsScreen, AddTargetDialog, AddBookDialog,
             ProfileEditorDialog, SettingsFormats, SettingsProfiles, HistoryScreen,
             Reorderable, QuoteTileService
@@ -93,6 +95,18 @@ ui/         Compose: ShareScreen, SettingsScreen, AddTargetDialog, AddBookDialog
 
 `domain/` deliberately has no Android dependency. Keep it that way — it is why the
 pipeline is testable without a device.
+
+**The app language is installed in `attachBaseContext`**, not through `LocaleManager` —
+that exists only from API 33, and one path behaving the same on every supported version is
+worth more than system integration. The cost is that the system's per-app language screen
+will not show a language chosen in here. Changing it calls `recreate()`, which is what
+re-runs that override.
+
+The trap this leaves: `stringResource` reads from the *context*, so it follows a language
+change — but anything already turned into a sentence and parked in `ShareUiState` does not.
+That is why the state carries `OriginKind`, a kind, and `ShareScreen` does the wording: a
+sentence built in the view model would be frozen in whichever language was current when the
+share arrived, and still be there after the user switches.
 
 **A capture is a target paired with a book.** Two axes, deliberately independent:
 

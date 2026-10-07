@@ -101,7 +101,7 @@ private fun FormatEditorDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-title = {
+        title = {
             Text(
                 stringResource(if (existing == null) R.string.formats_new else R.string.formats_edit)
             )
@@ -123,7 +123,7 @@ title = {
                     onValueChange = { template = it },
                     label = { Text(stringResource(R.string.formats_template)) },
                     supportingText = {
-Text(stringResource(R.string.settings_placeholders_prefix) + Template.placeholders.joinToString(" ") { "{$it}" })
+                        Text(stringResource(R.string.settings_placeholders_prefix) + Template.placeholders.joinToString(" ") { "{$it}" })
                     },
                     minLines = 4,
                     modifier = Modifier.fillMaxWidth(),

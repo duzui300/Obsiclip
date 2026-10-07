@@ -80,6 +80,11 @@
     <string name="section_custom_rules">自定义规则</string>
     <string name="section_app_rules">按 App 指定规则</string>
     <string name="section_records">记录</string>
+    <string name="section_language">语言</string>
+    <string name="settings_language_hint">只影响本 App；选「跟随系统」时用设备语言。</string>
+    <string name="language_system">跟随系统</string>
+    <string name="language_english">English</string>
+    <string name="language_chinese">简体中文</string>
     <string name="settings_history_button">发送历史（%1$d 条）</string>
     <string name="settings_outbox_hint">发送失败的条目会进待发队列。为避免打扰，只在你打开本 App 时重发 —— Android 不允许后台启动 Obsidian。</string>
     <string name="settings_retry_now">立即重发待发队列</string>

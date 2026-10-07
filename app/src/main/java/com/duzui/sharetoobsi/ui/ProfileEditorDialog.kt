@@ -47,7 +47,7 @@ fun ProfileEditorDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-title = {
+        title = {
             Text(
                 stringResource(if (existing == null) R.string.profile_new else R.string.profile_edit)
             )

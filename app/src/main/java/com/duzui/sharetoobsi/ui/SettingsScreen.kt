@@ -43,6 +43,7 @@ import com.duzui.sharetoobsi.BookDraft
 import com.duzui.sharetoobsi.R
 import com.duzui.sharetoobsi.ShareUiState
 import com.duzui.sharetoobsi.TargetDraft
+import com.duzui.sharetoobsi.data.AppLanguage
 import com.duzui.sharetoobsi.data.BookEntity
 import com.duzui.sharetoobsi.data.FormatEntity
 import com.duzui.sharetoobsi.data.ProfileEntity
@@ -57,6 +58,8 @@ import com.duzui.sharetoobsi.send.CollectorStatus
 fun SettingsScreen(
     state: ShareUiState,
     onBack: () -> Unit,
+    language: AppLanguage,
+    onLanguage: (AppLanguage) -> Unit,
     onVault: (String) -> Unit,
     onHeading: (String) -> Unit,
     onTemplate: (String) -> Unit,
@@ -100,6 +103,7 @@ fun SettingsScreen(
     var addingBook by remember { mutableStateOf(false) }
     var profileMenu by remember { mutableStateOf(false) }
     var defaultTargetMenu by remember { mutableStateOf(false) }
+    var languageMenu by remember { mutableStateOf(false) }
 
     // Which sections are shut. Kept as a list of titles so it survives a rotation.
     // Everything starts folded. The screen grew past the point where an open list
@@ -289,10 +293,10 @@ fun SettingsScreen(
                     Text(stringResource(R.string.settings_add_book))
                 }
                 if (state.savedBooks.size > 1) {
-Text(
-                    stringResource(R.string.settings_drag_hint),
-                    style = MaterialTheme.typography.bodySmall,
-                )
+                    Text(
+                        stringResource(R.string.settings_drag_hint),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
                 }
 
                 val bookReorder = rememberReorderState(state.savedBooks.size)
@@ -318,10 +322,10 @@ Text(
                             )
                         }
                         IconButton(onClick = { editingBook = book }) {
-Icon(Icons.Filled.Edit, contentDescription = stringResource(R.string.action_edit))
+                            Icon(Icons.Filled.Edit, contentDescription = stringResource(R.string.action_edit))
                         }
                         IconButton(onClick = { onDeleteBook(book) }) {
-Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.action_delete))
+                            Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.action_delete))
                         }
                     }
                     HorizontalDivider()
@@ -444,6 +448,27 @@ Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.action_de
                 )
             }
 
+            Section(SettingsSection.Language, collapsed, ::toggle) {
+                Text(
+                    stringResource(R.string.settings_language_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                OutlinedButton(onClick = { languageMenu = true }, modifier = Modifier.fillMaxWidth()) {
+                    Text(languageLabel(language))
+                }
+                DropdownMenu(expanded = languageMenu, onDismissRequest = { languageMenu = false }) {
+                    AppLanguage.entries.forEach { option ->
+                        DropdownMenuItem(
+                            text = { Text(languageLabel(option)) },
+                            onClick = {
+                                onLanguage(option)
+                                languageMenu = false
+                            },
+                        )
+                    }
+                }
+            }
+
             Section(SettingsSection.Records, collapsed, ::toggle) {
                 OutlinedButton(onClick = onOpenHistory, modifier = Modifier.fillMaxWidth()) {
                     Text(stringResource(R.string.settings_history_button, state.history.size))
@@ -539,8 +564,21 @@ private enum class SettingsSection(val labelRes: Int) {
     Cleanup(R.string.section_cleanup),
     CustomRules(R.string.section_custom_rules),
     AppRules(R.string.section_app_rules),
+    Language(R.string.section_language),
     Records(R.string.section_records),
     Experimental(R.string.section_experimental),
+}
+
+/**
+ * The name of a language, in that language. The two real choices are endonyms on purpose:
+ * someone who cannot read the language the app is currently in still has to be able to find
+ * their own in this list.
+ */
+@Composable
+fun languageLabel(language: AppLanguage): String = when (language) {
+    AppLanguage.System -> stringResource(R.string.language_system)
+    AppLanguage.English -> stringResource(R.string.language_english)
+    AppLanguage.Chinese -> stringResource(R.string.language_chinese)
 }
 
 /** A section whose body hides behind its title, so a long screen stays scannable. */

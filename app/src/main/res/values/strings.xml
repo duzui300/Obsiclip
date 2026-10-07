@@ -80,6 +80,11 @@
     <string name="section_custom_rules">Custom rules</string>
     <string name="section_app_rules">Rules per app</string>
     <string name="section_records">Records</string>
+    <string name="section_language">Language</string>
+    <string name="settings_language_hint">This app only — “Follow system” uses the device language.</string>
+    <string name="language_system">Follow system</string>
+    <string name="language_english">English</string>
+    <string name="language_chinese">简体中文</string>
     <string name="settings_history_button">History (%1$d)</string>
     <string name="settings_outbox_hint">Failed sends go to a queue. They are only retried while this app is open — Android will not let a background task start Obsidian.</string>
     <string name="settings_retry_now">Retry the queue now</string>
