@@ -12,4 +12,25 @@
     <string name="kindle_import_body_manual">自动滚动没成功，请手动划到底再点「完成」</string>
     <string name="kindle_import_finish">完成</string>
     <string name="kindle_import_nothing">没读到划线。请确认停在「注解」列表页，或手动划一下。</string>
+
+    <!-- Share screen. Chinese for now: this pass only moves the text out of the code, so
+         the UI stays byte-identical until the English pass flips the default. -->
+    <string name="share_send">写入 Obsidian</string>
+    <string name="share_destination_label">写到哪</string>
+    <string name="share_book_label">在读哪本</string>
+    <string name="share_add_short">＋</string>
+    <string name="share_append_to_end_official">追加到文件末尾 —— 官方 URI 无法指定小节</string>
+    <string name="share_append_to_section">追加到小节：%1$s</string>
+    <string name="share_append_to_end">追加到文件末尾</string>
+    <string name="share_no_books">还没有书。加一本之后，出处行和路径里的 {title} 才能填上。</string>
+    <string name="share_no_author_year">（没有作者和年份）</string>
+    <string name="share_payload_label">将写入的内容</string>
+    <string name="share_reread_clipboard">重读剪贴板</string>
+    <string name="share_regenerate">重新生成</string>
+    <string name="share_origin_chars">%1$s · 原文 %2$d 字</string>
+    <string name="share_rules_label">清洗规则</string>
+    <string name="share_empty_title">还没有内容</string>
+    <string name="share_empty_title_origin">%1$s —— 但内容为空</string>
+    <string name="share_empty_hint">从别的 App 分享过来，或者在那里选中文字后「复制」，再读进来。&#10;分享面板有长度限制的 App（比如 Kindle），走复制这条路更稳，也更干净。</string>
+    <string name="share_read_clipboard">从剪贴板读取</string>
 </resources>

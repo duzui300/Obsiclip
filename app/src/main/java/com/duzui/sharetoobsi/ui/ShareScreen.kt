@@ -38,9 +38,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.duzui.sharetoobsi.BookDraft
+import com.duzui.sharetoobsi.R
 import com.duzui.sharetoobsi.ShareUiState
 import com.duzui.sharetoobsi.TargetDraft
 import com.duzui.sharetoobsi.domain.SourceProfile
@@ -106,7 +108,7 @@ fun ShareScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("拾曜Obsiclip") },
+                title = { Text(stringResource(R.string.app_name)) },
                 actions = {
                     IconButton(onClick = onOpenSettings) {
                         Icon(Icons.Filled.Settings, contentDescription = "设置")
@@ -132,7 +134,7 @@ fun ShareScreen(
                     .fillMaxWidth()
                     .height(52.dp),
             ) {
-                Text("写入 Obsidian", style = MaterialTheme.typography.titleMedium)
+                Text(stringResource(R.string.share_send), style = MaterialTheme.typography.titleMedium)
             }
 
             DestinationSection(
@@ -172,7 +174,7 @@ private fun DestinationSection(
             modifier = Modifier.padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text("写到哪", style = MaterialTheme.typography.labelMedium)
+            Text(stringResource(R.string.share_destination_label), style = MaterialTheme.typography.labelMedium)
             Row(
                 modifier = Modifier.horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -196,16 +198,16 @@ private fun DestinationSection(
                 FilterChip(
                     selected = false,
                     onClick = onAdd,
-                    label = { Text("＋") },
+                    label = { Text(stringResource(R.string.share_add_short)) },
                 )
             }
             Text(state.targetPath, style = MaterialTheme.typography.bodyMedium)
             Text(
                 when {
                     state.settings.mode == WriteMode.OFFICIAL ->
-                        "追加到文件末尾 —— 官方 URI 无法指定小节"
-                    state.effectiveHeading != null -> "追加到小节：${state.effectiveHeading}"
-                    else -> "追加到文件末尾"
+                        stringResource(R.string.share_append_to_end_official)
+                    state.effectiveHeading != null -> stringResource(R.string.share_append_to_section, state.effectiveHeading)
+                    else -> stringResource(R.string.share_append_to_end)
                 },
                 style = MaterialTheme.typography.bodySmall,
             )
@@ -225,7 +227,7 @@ private fun BookSection(
             modifier = Modifier.padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text("在读哪本", style = MaterialTheme.typography.labelMedium)
+            Text(stringResource(R.string.share_book_label), style = MaterialTheme.typography.labelMedium)
             Row(
                 modifier = Modifier.horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -249,18 +251,18 @@ private fun BookSection(
                 FilterChip(
                     selected = false,
                     onClick = onAdd,
-                    label = { Text("＋") },
+                    label = { Text(stringResource(R.string.share_add_short)) },
                 )
             }
             val book = state.chosenBook
             Text(
                 if (book == null) {
-                    "还没有书。加一本之后，出处行和路径里的 {title} 才能填上。"
+                    stringResource(R.string.share_no_books)
                 } else {
                     listOfNotNull(
                         book.author.takeIf { it.isNotBlank() },
                         book.year.takeIf { it.isNotBlank() },
-                    ).joinToString(" · ").ifBlank { "（没有作者和年份）" }
+                    ).joinToString(" · ").ifBlank { stringResource(R.string.share_no_author_year) }
                 },
                 style = MaterialTheme.typography.bodySmall,
             )
@@ -276,7 +278,7 @@ private fun EmptyState(origin: String, onReadClipboard: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text(
-                if (origin.isBlank()) "还没有内容" else "$origin —— 但内容为空",
+                if (origin.isBlank()) stringResource(R.string.share_empty_title) else stringResource(R.string.share_empty_title_origin, origin),
                 style = MaterialTheme.typography.bodyMedium,
             )
             Text(
@@ -285,7 +287,7 @@ private fun EmptyState(origin: String, onReadClipboard: () -> Unit) {
                 style = MaterialTheme.typography.bodySmall,
             )
             OutlinedButton(onClick = onReadClipboard, modifier = Modifier.fillMaxWidth()) {
-                Text("从剪贴板读取")
+                Text(stringResource(R.string.share_read_clipboard))
             }
         }
     }
@@ -301,13 +303,13 @@ private fun PayloadField(
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                "将写入的内容",
+                stringResource(R.string.share_payload_label),
                 style = MaterialTheme.typography.labelMedium,
                 modifier = Modifier.weight(1f),
             )
-            TextButton(onClick = onReadClipboard) { Text("重读剪贴板") }
+            TextButton(onClick = onReadClipboard) { Text(stringResource(R.string.share_reread_clipboard)) }
             if (state.payloadOverride != null) {
-                TextButton(onClick = onRegenerate) { Text("重新生成") }
+                TextButton(onClick = onRegenerate) { Text(stringResource(R.string.share_regenerate)) }
             }
         }
         OutlinedTextField(
@@ -321,7 +323,7 @@ private fun PayloadField(
             textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
         )
         Text(
-            "${state.origin} · 原文 ${state.raw.length} 字",
+            stringResource(R.string.share_origin_chars, state.origin, state.raw.length),
             style = MaterialTheme.typography.bodySmall,
         )
     }
@@ -332,7 +334,7 @@ private fun SourcePicker(state: ShareUiState, onProfileChange: (SourceProfile) -
     var expanded by remember { mutableStateOf(false) }
 
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Text("清洗规则", modifier = Modifier.weight(1f))
+        Text(stringResource(R.string.share_rules_label), modifier = Modifier.weight(1f))
         OutlinedButton(onClick = { expanded = true }) { Text(state.profile.label) }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             SourceProfiles.ALL.forEach { profile ->
