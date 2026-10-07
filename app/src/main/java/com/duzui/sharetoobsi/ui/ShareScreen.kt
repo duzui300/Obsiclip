@@ -334,11 +334,11 @@ private fun SourcePicker(state: ShareUiState, onProfileChange: (SourceProfile) -
 
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(stringResource(R.string.share_rules_label), modifier = Modifier.weight(1f))
-        OutlinedButton(onClick = { expanded = true }) { Text(state.profile.label) }
+        OutlinedButton(onClick = { expanded = true }) { Text(profileLabel(state.profile)) }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             SourceProfiles.ALL.forEach { profile ->
                 DropdownMenuItem(
-                    text = { Text(profile.label) },
+                    text = { Text(profileLabel(profile)) },
                     onClick = {
                         onProfileChange(profile)
                         expanded = false

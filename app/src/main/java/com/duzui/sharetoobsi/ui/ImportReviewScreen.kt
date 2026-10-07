@@ -138,7 +138,10 @@ fun ImportReviewScreen(
                     .fillMaxWidth()
                     .padding(16.dp),
             ) {
-                Text(if (chosen > 0) "写入 $chosen 条" else "没有勾选任何条目")
+Text(
+                    if (chosen > 0) stringResource(R.string.import_review_write, chosen)
+                    else stringResource(R.string.import_review_write_none)
+                )
             }
         }
     }

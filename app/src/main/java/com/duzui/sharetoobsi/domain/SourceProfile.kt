@@ -68,7 +68,7 @@ object SourceProfiles {
      */
     val GENERIC = SourceProfile(
         id = "generic",
-        label = "通用",
+        label = "Generic",
         linePatterns = SHARE_CHROME_LINES,
     )
 

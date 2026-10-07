@@ -18,8 +18,6 @@ object Defaults {
     const val INBOX_NOTE = "00-Inbox/摘录.md"
 
     /** The seeded inbox target's name. It is an ordinary target, not a special case. */
-    const val INBOX_NAME = "收件箱"
-
     const val TAGS = "#reading"
 
     /**
@@ -31,16 +29,17 @@ object Defaults {
     /**
      * Starter output formats, offered once on first run.
      *
-     * Ordinary rows afterwards — editable and deletable — so treat this as a starting
-     * point rather than a fixture.
+     * Templates only: the names that go with them are UI text, so they come from resources
+     * when these are seeded. Ordinary rows afterwards — editable and deletable — so treat
+     * this as a starting point rather than a fixture.
      */
-    val PRESET_FORMATS: List<Pair<String, String>> = listOf(
-        "引用块" to "{text}\n\n> — {author}《{title}》{year} {tags}",
-        "纯摘录" to "{text}",
-        "摘录 + 出处" to "{text}\n\n— {author}《{title}》{year} {tags}",
-        "高亮标注" to "> =={text}==\n>\n> — {author}《{title}》{tags}",
-        "带日期" to "{text}\n\n> — {author}《{title}》{year} · {date} {tags}",
-        "小节标题 + 摘录" to "### {title}\n\n{text}\n\n> — {author} {year} {tags}",
+    val PRESET_FORMATS: List<String> = listOf(
+        "{text}\n\n> — {author}《{title}》{year} {tags}",
+        "{text}",
+        "{text}\n\n— {author}《{title}》{year} {tags}",
+        "> =={text}==\n>\n> — {author}《{title}》{tags}",
+        "{text}\n\n> — {author}《{title}》{year} · {date} {tags}",
+        "### {title}\n\n{text}\n\n> — {author} {year} {tags}",
     )
 
     /** The book-note skeleton, mirroring `Templates/Book.md` in the vault. */

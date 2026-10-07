@@ -34,6 +34,7 @@ import com.duzui.sharetoobsi.R
 import com.duzui.sharetoobsi.AppEntry
 import com.duzui.sharetoobsi.data.ProfileEntity
 import com.duzui.sharetoobsi.domain.SourceProfile
+import com.duzui.sharetoobsi.domain.SourceProfiles
 
 /** Rule sets the user wrote, with their own optional output template. */
 @Composable
@@ -62,6 +63,7 @@ fun RulesSection(
         )
     }
 
+    // Fetched up front: a lambda that is not itself composable cannot call stringResource.
     val lineRules = stringResource(R.string.profiles_line_rules)
     val ownTemplate = stringResource(R.string.profiles_own_template)
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -98,6 +100,19 @@ fun RulesSection(
         }
     }
 }
+
+/**
+ * The name shown for a rule set. Only the built-in generic has text that has to be
+ * translated; everything else is either a product name or what the user typed. The mapping
+ * lives here rather than in domain/, which must not depend on Android.
+ */
+@Composable
+fun profileLabel(profile: SourceProfile): String =
+    if (profile.id == SourceProfiles.GENERIC.id) {
+        stringResource(R.string.profile_generic)
+    } else {
+        profile.label
+    }
 
 /** Pins a source app to a profile, overriding whatever package matching would guess. */
 @Composable
@@ -158,11 +173,11 @@ private fun ProfileDropdown(
     onPick: (SourceProfile) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
-    OutlinedButton(onClick = { expanded = true }) { Text(current?.label ?: stringResource(R.string.action_choose)) }
+    OutlinedButton(onClick = { expanded = true }) { Text(current?.let { profileLabel(it) } ?: stringResource(R.string.action_choose)) }
     DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
         options.forEach { profile ->
             DropdownMenuItem(
-                text = { Text(profile.label) },
+                text = { Text(profileLabel(profile)) },
                 onClick = {
                     onPick(profile)
                     expanded = false

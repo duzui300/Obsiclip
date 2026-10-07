@@ -125,8 +125,11 @@ fun HistoryScreen(
 private fun stamp(epochMillis: Long): String =
     Instant.ofEpochMilli(epochMillis).atZone(ZoneId.systemDefault()).format(STAMP)
 
+@Composable
 private fun outcomeLabel(entry: HistoryEntity): String = when (entry.outcome) {
-    "Dispatched" -> if (entry.viaClipboard) "已发送（剪贴板）" else "已发送"
-    "NoObsidian" -> "没找到 Obsidian"
-    else -> "失败"
+    "Dispatched" -> stringResource(
+        if (entry.viaClipboard) R.string.history_sent_clipboard else R.string.history_sent
+    )
+    "NoObsidian" -> stringResource(R.string.history_no_obsidian)
+    else -> stringResource(R.string.history_failed)
 }

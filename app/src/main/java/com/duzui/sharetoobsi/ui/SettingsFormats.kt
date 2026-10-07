@@ -101,7 +101,11 @@ private fun FormatEditorDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (existing == null) "新建格式" else "编辑格式") },
+title = {
+            Text(
+                stringResource(if (existing == null) R.string.formats_new else R.string.formats_edit)
+            )
+        },
         text = {
             Column(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
@@ -119,7 +123,7 @@ private fun FormatEditorDialog(
                     onValueChange = { template = it },
                     label = { Text(stringResource(R.string.formats_template)) },
                     supportingText = {
-                        Text("占位符：" + Template.placeholders.joinToString(" ") { "{$it}" })
+Text(stringResource(R.string.settings_placeholders_prefix) + Template.placeholders.joinToString(" ") { "{$it}" })
                     },
                     minLines = 4,
                     modifier = Modifier.fillMaxWidth(),

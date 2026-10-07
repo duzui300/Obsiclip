@@ -289,7 +289,10 @@ fun SettingsScreen(
                     Text(stringResource(R.string.settings_add_book))
                 }
                 if (state.savedBooks.size > 1) {
-                    Text("长按拖动排序，和写入界面的顺序一致。", style = MaterialTheme.typography.bodySmall)
+Text(
+                    stringResource(R.string.settings_drag_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                )
                 }
 
                 val bookReorder = rememberReorderState(state.savedBooks.size)
@@ -315,10 +318,10 @@ fun SettingsScreen(
                             )
                         }
                         IconButton(onClick = { editingBook = book }) {
-                            Icon(Icons.Filled.Edit, contentDescription = "编辑")
+Icon(Icons.Filled.Edit, contentDescription = stringResource(R.string.action_edit))
                         }
                         IconButton(onClick = { onDeleteBook(book) }) {
-                            Icon(Icons.Filled.Delete, contentDescription = "删除")
+Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.action_delete))
                         }
                     }
                     HorizontalDivider()
@@ -400,14 +403,14 @@ fun SettingsScreen(
                     Text(stringResource(R.string.settings_default_profile), modifier = Modifier.weight(1f))
                     OutlinedButton(onClick = { profileMenu = true }) {
                         Text(
-                            state.availableProfiles.firstOrNull { it.id == settings.defaultProfileId }?.label
+                            state.availableProfiles.firstOrNull { it.id == settings.defaultProfileId }?.let { profileLabel(it) }
                                 ?: stringResource(R.string.profile_generic)
                         )
                     }
                     DropdownMenu(expanded = profileMenu, onDismissRequest = { profileMenu = false }) {
                         state.availableProfiles.forEach { profile ->
                             DropdownMenuItem(
-                                text = { Text(profile.label) },
+                                text = { Text(profileLabel(profile)) },
                                 onClick = {
                                     onDefaultProfileId(profile.id)
                                     profileMenu = false

@@ -52,7 +52,13 @@ fun AddBookDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (existing == null) "添加书籍" else "编辑书籍") },
+title = {
+            Text(
+                stringResource(
+                    if (existing == null) R.string.add_book_new else R.string.add_book_edit
+                )
+            )
+        },
         text = {
             Column(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
@@ -86,7 +92,10 @@ fun AddBookDialog(
                 if (existing == null) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(modifier = Modifier.weight(1f)) {
-                            Text("同时创建笔记骨架", style = MaterialTheme.typography.bodyMedium)
+Text(
+                                stringResource(R.string.add_book_skeleton),
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
                             Text(
                                 stringResource(R.string.add_book_skeleton_hint),
                                 style = MaterialTheme.typography.bodySmall,

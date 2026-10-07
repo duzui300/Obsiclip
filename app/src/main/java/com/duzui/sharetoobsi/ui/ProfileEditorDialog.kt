@@ -47,7 +47,11 @@ fun ProfileEditorDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (existing == null) "新建规则" else "编辑规则") },
+title = {
+            Text(
+                stringResource(if (existing == null) R.string.profile_new else R.string.profile_edit)
+            )
+        },
         text = {
             Column(
                 modifier = Modifier.verticalScroll(rememberScrollState()),

@@ -6,6 +6,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import com.duzui.sharetoobsi.R
 import com.duzui.sharetoobsi.domain.ObsidianUri
 import com.duzui.sharetoobsi.domain.WriteRequest
 
@@ -62,6 +63,6 @@ class ObsidianSender(private val context: Context) {
 
     private fun putOnClipboard(text: String) {
         context.getSystemService(ClipboardManager::class.java)
-            ?.setPrimaryClip(ClipData.newPlainText("摘录", text))
+            ?.setPrimaryClip(ClipData.newPlainText(context.getString(R.string.clip_label), text))
     }
 }

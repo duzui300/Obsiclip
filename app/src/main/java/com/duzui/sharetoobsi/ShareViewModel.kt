@@ -242,11 +242,11 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
                     // Offered once, then they are the user's to edit or delete.
                     container.settings.update { it.copy(presetFormatsSeeded = true) }
                     if (rows.isEmpty()) {
-                        Defaults.PRESET_FORMATS.forEachIndexed { index, preset ->
+                        Defaults.PRESET_FORMATS.forEachIndexed { index, template ->
                             formatDao.upsert(
                                 FormatEntity(
-                                    name = preset.first,
-                                    template = preset.second,
+                                    name = str(PRESET_FORMAT_NAMES[index]),
+                                    template = template,
                                     sortOrder = index,
                                 )
                             )
@@ -267,7 +267,7 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
                     if (list.none { it.path == Defaults.INBOX_NOTE }) {
                         targets.upsert(
                             TargetEntity(
-                                name = Defaults.INBOX_NAME,
+                                name = str(R.string.default_inbox_name),
                                 path = Defaults.INBOX_NOTE,
                                 // Ahead of existing targets, which all default to 0.
                                 sortOrder = -1,
@@ -297,7 +297,10 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
         _state.update { current ->
             current.copy(
                 raw = share.text,
-                origin = "分享自 ${share.sourcePackage ?: "未知来源"}",
+                origin = str(
+                    R.string.vm_shared_from,
+                    share.sourcePackage ?: str(R.string.vm_unknown_source),
+                ),
                 sourcePackage = share.sourcePackage,
                 profile = resolveProfile(current, share.sourcePackage),
                 payloadOverride = null,
@@ -322,11 +325,16 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
      */
     fun readFromClipboard(text: String?, quiet: Boolean = false) {
         if (text.isNullOrBlank()) {
-            if (!quiet) _message.value = "剪贴板里没有文字"
+            if (!quiet) _message.value = str(R.string.vm_clipboard_empty)
             return
         }
         _state.update {
-            it.copy(raw = text, origin = "剪贴板", sourcePackage = null, payloadOverride = null)
+            it.copy(
+                raw = text,
+                origin = str(R.string.vm_from_clipboard),
+                sourcePackage = null,
+                payloadOverride = null,
+            )
         }
     }
 
@@ -404,7 +412,7 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
     fun saveBook(draft: BookDraft) {
         val title = draft.title.trim()
         if (title.isEmpty()) {
-            _message.value = "先填书名"
+            _message.value = str(R.string.vm_need_book_title)
             return
         }
         viewModelScope.launch {
@@ -426,10 +434,14 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
             if (draft.createSkeleton) {
                 val path = previewBookPath(title)
                 if (writeSkeleton(title, path, draft.author.trim(), draft.year.trim())) {
-                    _message.value = "已保存「$title」并写入骨架"
+                    _message.value = str(R.string.vm_book_saved_skeleton, title)
                 }
             } else {
-                _message.value = if (existing == null) "已添加「$title」" else "已保存「$title」"
+                _message.value = if (existing == null) {
+                    str(R.string.vm_book_added, title)
+                } else {
+                    str(R.string.vm_book_saved, title)
+                }
             }
         }
     }
@@ -471,12 +483,12 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
     fun saveTarget(draft: TargetDraft) {
         val name = draft.name.trim()
         if (name.isEmpty()) {
-            _message.value = "给这个目标起个名字"
+            _message.value = str(R.string.vm_need_target_name)
             return
         }
         val path = draft.path.trim().ifBlank { _state.value.settings.pathTemplate }
         if (path.isBlank()) {
-            _message.value = "填一下笔记路径"
+            _message.value = str(R.string.vm_need_target_path)
             return
         }
 
@@ -494,7 +506,11 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
             )
             pendingTargetId = id
             _state.update { it.copy(selectedTargetId = id) }
-            _message.value = if (existing == null) "已添加目标「$name」" else "已保存「$name」"
+            _message.value = if (existing == null) {
+                str(R.string.vm_target_added, name)
+            } else {
+                str(R.string.vm_target_saved, name)
+            }
         }
     }
 
@@ -525,7 +541,7 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
 
     fun saveFormat(rowId: Long?, name: String, template: String) {
         if (name.isBlank()) {
-            _message.value = "给这个格式起个名字"
+            _message.value = str(R.string.vm_need_format_name)
             return
         }
         viewModelScope.launch {
@@ -537,7 +553,7 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
                     sortOrder = _state.value.formats.size,
                 )
             )
-            _message.value = "已保存格式「$name」"
+            _message.value = str(R.string.vm_format_saved, name)
         }
     }
 
@@ -561,7 +577,7 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
         template: String,
     ) {
         if (name.isBlank()) {
-            _message.value = "给这个规则起个名字"
+            _message.value = str(R.string.vm_need_rule_name)
             return
         }
         viewModelScope.launch {
@@ -582,7 +598,7 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
                 val edited = assembled.firstOrNull { it.id == userProfileId(id) }
                 current.copy(profile = edited ?: current.profile, payloadOverride = null)
             }
-            _message.value = "已保存规则「$name」"
+            _message.value = str(R.string.vm_rule_saved, name)
         }
     }
 
@@ -620,16 +636,16 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
             )
         )
         _message.value = when (outcome) {
-            is SendOutcome.Dispatched -> "已重发到 ${entry.targetPath}"
-            SendOutcome.NoObsidian -> "没找到 Obsidian"
-            is SendOutcome.Failed -> "重发失败：${outcome.message}"
+            is SendOutcome.Dispatched -> str(R.string.vm_resent_to, entry.targetPath)
+            SendOutcome.NoObsidian -> str(R.string.vm_no_obsidian)
+            is SendOutcome.Failed -> str(R.string.vm_resend_failed, outcome.message)
         }
     }
 
     fun clearHistory() {
         viewModelScope.launch {
             _state.value.history.forEach { history.delete(it.id) }
-            _message.value = "已清空发送历史"
+            _message.value = str(R.string.vm_history_cleared)
         }
     }
 
@@ -652,7 +668,7 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
             android.content.Intent(ACTION_ARM_KINDLE_IMPORT)
                 .setPackage(getApplication<Application>().packageName)
         )
-        _message.value = "已就绪：切到 Kindle 打开「注解」页；已经在那一页的话，划一下或点一下它"
+        _message.value = str(R.string.vm_import_armed)
     }
 
     /** How many highlights are waiting to be reviewed, for the settings entry point. */
@@ -666,7 +682,7 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
     fun onImportOpened() {
         val items = container.kindleImport.items()
         if (items.isEmpty()) {
-            _message.value = "这次没读到划线"
+            _message.value = str(R.string.vm_import_nothing)
             return
         }
         viewModelScope.launch {
@@ -691,7 +707,7 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
             if (_state.value.settings.autoWriteImports) {
                 writeImport()
             } else {
-                _message.value = "读到 ${entries.size} 条，检查后写入"
+                _message.value = str(R.string.vm_import_ready, entries.size)
             }
         }
     }
@@ -732,7 +748,7 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
         val current = _state.value
         val chosen = current.importEntries.filter { it.included }
         if (chosen.isEmpty()) {
-            _message.value = "没有勾选任何条目"
+            _message.value = str(R.string.vm_import_none)
             return
         }
 
@@ -758,9 +774,9 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
         _state.update { it.copy(importEntries = emptyList()) }
 
         _message.value = when (outcome) {
-            is SendOutcome.Dispatched -> "已写入 ${chosen.size} 条到 ${current.targetPath}"
-            SendOutcome.NoObsidian -> "没找到 Obsidian，整批进了待发队列"
-            is SendOutcome.Failed -> "写入失败：${outcome.message}，整批进了待发队列"
+            is SendOutcome.Dispatched -> str(R.string.vm_import_written, chosen.size, current.targetPath)
+            SendOutcome.NoObsidian -> str(R.string.vm_batch_queued)
+            is SendOutcome.Failed -> str(R.string.vm_batch_failed, outcome.message)
         }
     }
 
@@ -769,7 +785,7 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
     fun send() {
         val current = _state.value
         if (current.raw.isBlank()) {
-            _message.value = "没有可写入的内容"
+            _message.value = str(R.string.vm_nothing_to_write)
             return
         }
 
@@ -797,9 +813,9 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
 
         _message.value = when (outcome) {
             is SendOutcome.Dispatched ->
-                if (outcome.viaClipboard) "已发送，正文走剪贴板" else "已发送"
-            SendOutcome.NoObsidian -> "没找到 Obsidian，可能没装或已停用；已存入待发队列"
-            is SendOutcome.Failed -> "发送失败：${outcome.message}；已存入待发队列"
+                if (outcome.viaClipboard) str(R.string.vm_sent_clipboard) else str(R.string.vm_sent)
+            SendOutcome.NoObsidian -> str(R.string.vm_send_no_obsidian)
+            is SendOutcome.Failed -> str(R.string.vm_send_failed, outcome.message)
         }
     }
 
@@ -808,7 +824,7 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             val queued = outbox.observeAll().first()
             if (queued.isEmpty()) {
-                _message.value = "待发队列是空的"
+                _message.value = str(R.string.vm_queue_empty)
                 return@launch
             }
             var sent = 0
@@ -832,7 +848,7 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
                     failed++
                 }
             }
-            _message.value = "重发完成：成功 $sent，仍失败 $failed"
+            _message.value = str(R.string.vm_retry_done, sent, failed)
         }
     }
 
@@ -863,11 +879,11 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
         return when (outcome) {
             is SendOutcome.Dispatched -> true
             SendOutcome.NoObsidian -> {
-                _message.value = "没找到 Obsidian，骨架没写"
+                _message.value = str(R.string.vm_skeleton_no_obsidian)
                 false
             }
             is SendOutcome.Failed -> {
-                _message.value = "骨架写入失败：${outcome.message}"
+                _message.value = str(R.string.vm_skeleton_failed, outcome.message)
                 false
             }
         }
@@ -910,7 +926,21 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { container.settings.update(transform) }
     }
 
+    /** This is an AndroidViewModel so its messages can be localised, not only its screens. */
+    private fun str(id: Int, vararg args: Any): String =
+        getApplication<Application>().getString(id, *args)
+
     private companion object {
+        /** Same order as [Defaults.PRESET_FORMATS]; the names are text, the templates are not. */
+        val PRESET_FORMAT_NAMES = listOf(
+            R.string.format_preset_blockquote,
+            R.string.format_preset_plain,
+            R.string.format_preset_with_source,
+            R.string.format_preset_highlight,
+            R.string.format_preset_dated,
+            R.string.format_preset_heading,
+        )
+
         /**
          * Android only serves the clipboard to the focused app. On a cold start focus
          * arrives a few frames after the first composition, so the read is retried rather
