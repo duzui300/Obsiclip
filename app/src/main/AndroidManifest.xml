@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- To say a collection finished while the user is still in Kindle. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <!-- Android 11+ package visibility. `obsidian` is needed to probe whether Obsidian is
          installed; launcher apps are needed to hand the user back to the app they shared
          from, which is only ever known at runtime. -->
@@ -76,6 +79,23 @@
             <intent-filter>
                 <action android:name="android.service.quicksettings.action.QS_TILE" />
             </intent-filter>
+        </service>
+
+        <!-- Reads highlights off Kindle's notebook screen, which is the only place Kindle
+             leaves them reachable: its reading view forbids selecting a long passage, so
+             sharing and copying both fail there. Restricted to Kindle by the service
+             config, so it cannot observe any other app. -->
+        <service
+            android:name=".send.KindleNotebookService"
+            android:exported="false"
+            android:label="@string/kindle_service_summary"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/kindle_accessibility" />
         </service>
     </application>
 

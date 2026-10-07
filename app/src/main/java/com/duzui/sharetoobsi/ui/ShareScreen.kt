@@ -61,6 +61,9 @@ fun ShareScreen(
     onSaveBook: (BookDraft) -> Unit,
     onDeriveSkeletonPath: (String) -> String,
     onReadClipboard: () -> Unit,
+    onArmKindleImport: () -> Unit,
+    onOpenAccessibilitySettings: () -> Unit,
+    kindleServiceReady: Boolean,
     onPayloadEdit: (String) -> Unit,
     onRegenerate: () -> Unit,
     onSend: () -> Unit,
@@ -147,6 +150,12 @@ fun ShareScreen(
                 onSelect = onSelectBook,
                 onMove = onMoveBook,
                 onAdd = { addingBook = true },
+            )
+
+            ImportCard(
+                serviceReady = kindleServiceReady,
+                onArm = onArmKindleImport,
+                onOpenSettings = onOpenAccessibilitySettings,
             )
 
             if (state.raw.isBlank()) {
@@ -264,6 +273,40 @@ private fun BookSection(
                 },
                 style = MaterialTheme.typography.bodySmall,
             )
+        }
+    }
+}
+
+/**
+ * Bulk import from Kindle. Kept beside the ordinary capture rather than behind a menu: it
+ * lands in the same preview below, just with more than one entry in it.
+ */
+@Composable
+private fun ImportCard(serviceReady: Boolean, onArm: () -> Unit, onOpenSettings: () -> Unit) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text("Kindle 注解抓取", style = MaterialTheme.typography.labelMedium)
+            Text(
+                if (serviceReady) {
+                    "在 Kindle 里打开这本书的「注解」列表，点下面的按钮，这里会自己读完它。"
+                } else {
+                    "需要先开启「无障碍」权限 —— 只能在系统设置里开，App 自己开不了。" +
+                        "它只看 Kindle，看不到别的应用。"
+                },
+                style = MaterialTheme.typography.bodySmall,
+            )
+            if (serviceReady) {
+                OutlinedButton(onClick = onArm, modifier = Modifier.fillMaxWidth()) {
+                    Text("开始抓取")
+                }
+            } else {
+                OutlinedButton(onClick = onOpenSettings, modifier = Modifier.fillMaxWidth()) {
+                    Text("去开启无障碍权限")
+                }
+            }
         }
     }
 }

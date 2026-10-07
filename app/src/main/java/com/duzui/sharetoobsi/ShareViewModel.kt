@@ -601,6 +601,27 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
         _message.value = null
     }
 
+    // ---- Kindle notebook import -------------------------------------------
+
+    /**
+     * Arms the collector. There is nothing else to press: once armed it waits for Kindle's
+     * notebook screen to appear and reads it there, which is the only place Kindle leaves
+     * its highlights reachable.
+     */
+    fun armKindleImport() {
+        container.kindleImport.arm()
+        _message.value = "已就绪：切到 Kindle，打开这本书的「注解」页"
+    }
+
+    /** Called when the collector's notification brings the user back. */
+    fun onImportOpened() {
+        val items = container.kindleImport.items()
+        _message.value = when {
+            items.isEmpty() -> "这次没读到划线"
+            else -> "读到 ${items.size} 条"
+        }
+    }
+
     // ---- sending -----------------------------------------------------------
 
     fun send() {

@@ -2,6 +2,7 @@ package com.duzui.sharetoobsi
 
 import android.content.Context
 import com.duzui.sharetoobsi.data.AppDatabase
+import com.duzui.sharetoobsi.data.KindleImportStore
 import com.duzui.sharetoobsi.data.PendingReturn
 import com.duzui.sharetoobsi.data.SettingsStore
 import com.duzui.sharetoobsi.send.ObsidianSender
@@ -13,5 +14,6 @@ class AppContainer(context: Context) {
     val db: AppDatabase by lazy { AppDatabase.get(appContext) }
     val settings: SettingsStore by lazy { SettingsStore(appContext) }
     val pendingReturn: PendingReturn by lazy { PendingReturn(appContext) }
+    val kindleImport: KindleImportStore by lazy { KindleImportStore(appContext) }
     val sender: ObsidianSender by lazy { ObsidianSender(appContext) }
 }

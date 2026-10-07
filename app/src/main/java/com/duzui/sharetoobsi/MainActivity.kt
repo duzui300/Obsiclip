@@ -1,10 +1,15 @@
 package com.duzui.sharetoobsi
 
+import android.Manifest
+import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -14,6 +19,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.duzui.sharetoobsi.ui.HistoryScreen
 import com.duzui.sharetoobsi.ui.SettingsScreen
 import com.duzui.sharetoobsi.ui.ShareScreen
+import com.duzui.sharetoobsi.send.accessibilitySettingsIntent
+import com.duzui.sharetoobsi.send.isKindleServiceEnabled
 import com.duzui.sharetoobsi.ui.theme.ShareTransTheme
 
 class MainActivity : ComponentActivity() {
@@ -29,6 +36,16 @@ class MainActivity : ComponentActivity() {
 
     /** A target a Direct Share shortcut picked, applied once the target list has loaded. */
     private var requestedTargetId by mutableStateOf<Long?>(null)
+
+    /** Bumped when the collector's notification opens this screen with a result waiting. */
+    private var importRequests by mutableStateOf(0)
+
+    /** Watches the system setting, since only the user can turn the collector on. */
+    private var kindleServiceReady by mutableStateOf(false)
+
+    /** Needed on API 33+ for the "collection finished" notification to appear at all. */
+    private val notificationPermission =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
     private val container by lazy { AppContainer(this) }
 
@@ -47,6 +64,8 @@ class MainActivity : ComponentActivity() {
         if (savedInstanceState == null && incoming == null) launcherAdoptRequests = 1
         if (isFromTile(intent)) tileAdoptRequests = 1
         requestedTargetId = targetFrom(intent)
+        if (isFromImport(intent)) importRequests = 1
+        kindleServiceReady = isKindleServiceEnabled(this)
 
         setContent {
             ShareTransTheme {
@@ -55,6 +74,9 @@ class MainActivity : ComponentActivity() {
                 val message by viewModel.message.collectAsStateWithLifecycle()
 
                 LaunchedEffect(incoming) { viewModel.onShare(incoming) }
+                LaunchedEffect(importRequests) {
+                    if (importRequests > 0) viewModel.onImportOpened()
+                }
                 LaunchedEffect(requestedTargetId) {
                     requestedTargetId?.let { id ->
                         viewModel.selectTarget(id)
@@ -84,6 +106,14 @@ class MainActivity : ComponentActivity() {
                         onDeriveSkeletonPath = viewModel::previewBookPath,
                         onReadClipboard = {
                             viewModel.readFromClipboard(ClipboardReader.read(this@MainActivity))
+                        },
+                        kindleServiceReady = kindleServiceReady,
+                        onArmKindleImport = {
+                            askForNotificationPermission()
+                            viewModel.armKindleImport()
+                        },
+                        onOpenAccessibilitySettings = {
+                            startActivity(accessibilitySettingsIntent())
                         },
                         onPayloadEdit = viewModel::editPayload,
                         onRegenerate = viewModel::regenerate,
@@ -134,6 +164,12 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        // The user may have just come back from enabling it in system settings.
+        kindleServiceReady = isKindleServiceEnabled(this)
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
@@ -152,6 +188,11 @@ class MainActivity : ComponentActivity() {
             launcherAdoptRequests++
             return
         }
+        if (isFromImport(intent)) {
+            importRequests++
+            screen = Screen.Share
+            return
+        }
         requestedTargetId = targetFrom(intent)
         incoming = readIncoming()
         // A share arrived while settings were open; it belongs on the share screen.
@@ -160,6 +201,16 @@ class MainActivity : ComponentActivity() {
 
     private fun isLauncherEntry(intent: Intent): Boolean =
         intent.action == Intent.ACTION_MAIN && intent.getStringExtra(Intent.EXTRA_TEXT) == null
+
+    private fun askForNotificationPermission() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+        val granted = checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) ==
+            PackageManager.PERMISSION_GRANTED
+        if (!granted) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+    }
+
+    private fun isFromImport(intent: Intent?): Boolean =
+        intent?.getBooleanExtra(EXTRA_FROM_IMPORT, false) == true
 
     private fun isFromTile(intent: Intent?): Boolean =
         intent?.getBooleanExtra(EXTRA_FROM_TILE, false) == true
@@ -224,5 +275,13 @@ class MainActivity : ComponentActivity() {
 
         /** Set by a Direct Share shortcut to say which saved target was chosen. */
         const val EXTRA_TARGET_ID = "targetId"
+
+        /** Set by the collector's notification, meaning a finished run is waiting. */
+        const val EXTRA_FROM_IMPORT = "fromImport"
+
+        fun intentForImport(context: Context): Intent =
+            Intent(context, MainActivity::class.java)
+                .setAction(Intent.ACTION_MAIN)
+                .putExtra(EXTRA_FROM_IMPORT, true)
     }
 }

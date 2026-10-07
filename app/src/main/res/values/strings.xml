@@ -1,4 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">摘录入 Obsidian</string>
+
+    <!-- Accessibility service that reads Kindle's notebook screen. -->
+    <string name="kindle_service_summary">从 Kindle 的注解页收集划线</string>
+    <string name="kindle_service_description">只在 Kindle 的注解页读取屏幕上的划线文字，用于批量导入。平时不会读取任何其他应用。</string>
+
+    <string name="kindle_import_channel">Kindle 注解抓取</string>
+    <string name="kindle_import_title">抓到 %1$d 条划线</string>
+    <string name="kindle_import_body">点开检查并写入</string>
+    <string name="kindle_import_body_manual">自动滚动没成功，请手动划到底再点「完成」</string>
+    <string name="kindle_import_finish">完成</string>
+    <string name="kindle_import_nothing">没读到划线。请确认停在「注解」列表页，或手动划一下。</string>
 </resources>
