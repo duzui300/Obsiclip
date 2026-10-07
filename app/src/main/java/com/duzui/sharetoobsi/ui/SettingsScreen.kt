@@ -60,7 +60,6 @@ fun SettingsScreen(
     onPathTemplate: (String) -> Unit,
     onTags: (String) -> Unit,
     onMode: (WriteMode) -> Unit,
-    onSilent: (Boolean) -> Unit,
     onAutoReadClipboard: (Boolean) -> Unit,
     onReturnToSource: (Boolean) -> Unit,
     onCleanup: (CleanupOptions) -> Unit,
@@ -161,6 +160,17 @@ fun SettingsScreen(
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+            Section("写入目标", collapsed, ::toggle) {
+                Field("Vault 名称", settings.vault, onVault)
+                Field("默认小节标题", settings.heading, onHeading, "添加目的地时的默认值")
+                Field(
+                    "新目的地的默认路径",
+                    settings.pathTemplate,
+                    onPathTemplate,
+                    "可用 {title} {author} {year} {date}",
+                )
+            }
+
             Section("目的地", collapsed, ::toggle) {
                 Text(
                     "写到哪、写到哪个小节、用哪种格式。路径可以用 {title} {author} {year}，" +
@@ -201,7 +211,7 @@ fun SettingsScreen(
 
                 Button(onClick = { addingTarget = true }) { Text("添加目的地") }
                 if (state.savedTargets.size > 1) {
-                    Text("长按拖动排序，和分享界面芯片的顺序一致。", style = MaterialTheme.typography.bodySmall)
+                    Text("长按拖动排序，和写入界面的顺序一致。", style = MaterialTheme.typography.bodySmall)
                 }
 
                 val targetReorder = rememberReorderState(state.savedTargets.map { it.id })
@@ -251,7 +261,7 @@ fun SettingsScreen(
                 )
                 Button(onClick = { addingBook = true }) { Text("添加书籍") }
                 if (state.savedBooks.size > 1) {
-                    Text("长按拖动排序，和分享界面芯片的顺序一致。", style = MaterialTheme.typography.bodySmall)
+                    Text("长按拖动排序，和写入界面的顺序一致。", style = MaterialTheme.typography.bodySmall)
                 }
 
                 val bookReorder = rememberReorderState(state.savedBooks.map { it.id })
@@ -320,32 +330,16 @@ fun SettingsScreen(
                     },
                     style = MaterialTheme.typography.bodySmall,
                 )
-                Toggle("静默写入", settings.silent, onSilent)
-                Text(
-                    "Obsidian 一定会被拉到前台 —— URI 只能由它自己处理。所以「静默」实际做的是：" +
-                        "不打开那篇笔记，处理完立刻把控制权交还回来。",
-                    style = MaterialTheme.typography.bodySmall,
-                )
                 Toggle("写入后返回来源 App", settings.returnToSource, onReturnToSource)
                 Text(
-                    "开了这个，控制权交给来源 App 而不是本 App。两个都开就是回到你分享的地方。",
+                    "不勾选时，Obsidian 会打开刚写入的那篇笔记并停在那里。" +
+                        "勾上就立刻回到你分享的地方。",
                     style = MaterialTheme.typography.bodySmall,
                 )
                 Toggle("打开 App 时自动读取剪贴板", settings.autoReadClipboard, onAutoReadClipboard)
                 Text(
                     "从桌面或磁贴打开时覆盖当前内容；由分享进入时不受影响。",
                     style = MaterialTheme.typography.bodySmall,
-                )
-            }
-
-            Section("写入目标", collapsed, ::toggle) {
-                Field("Vault 名称", settings.vault, onVault)
-                Field("默认小节标题", settings.heading, onHeading, "添加目的地时的默认值")
-                Field(
-                    "新目的地的默认路径",
-                    settings.pathTemplate,
-                    onPathTemplate,
-                    "可用 {title} {author} {year} {date}",
                 )
             }
 

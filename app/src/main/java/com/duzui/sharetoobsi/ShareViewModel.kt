@@ -343,7 +343,6 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
     fun setPathTemplate(value: String) = settings { it.copy(pathTemplate = value) }
     fun setTags(value: String) = settings { it.copy(tags = value) }
     fun setMode(mode: WriteMode) = settings { it.copy(mode = mode) }
-    fun setSilent(value: Boolean) = settings { it.copy(silent = value) }
     fun setAutoReadClipboard(value: Boolean) = settings { it.copy(autoReadClipboard = value) }
     fun setReturnToSource(value: Boolean) = settings { it.copy(returnToSource = value) }
     fun setCleanup(options: CleanupOptions) = settings { it.copy(cleanup = options) }
@@ -611,12 +610,9 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
 
-        // Obsidian always comes to the foreground: a URI can only be handled by starting
-        // the app, so the plugin's silent mode can only mean "don't open the note". Quiet
-        // therefore has to mean "take control straight back" as well, which is what the
-        // callback is for — it fires after Obsidian has finished, and starting our
-        // activity is itself what returns us to the front.
-        val wantsControlBack = current.settings.silent || current.settings.returnToSource
+        // Obsidian always comes to the foreground — a URI can only be handled by starting
+        // the app — and it lands on the note it wrote. Leaving for the app that shared is
+        // the only way out of that, so the callback exists for exactly that.
         if (current.settings.returnToSource) {
             current.sourcePackage?.let { container.pendingReturn.remember(it) }
         }
@@ -628,8 +624,8 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
                 heading = current.effectiveHeading,
                 content = current.payload,
                 mode = current.settings.mode,
-                silent = current.settings.silent,
-                successCallback = if (wantsControlBack) RETURN_CALLBACK else null,
+                silent = false,
+                successCallback = if (current.settings.returnToSource) RETURN_CALLBACK else null,
             )
         )
 
@@ -696,6 +692,8 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
                 heading = null,
                 content = skeleton,
                 mode = WriteMode.OFFICIAL,
+                // Not a reading action, so it should not land the user in the new note.
+                silent = true,
             )
         )
         return when (outcome) {

@@ -101,7 +101,6 @@ class MainActivity : ComponentActivity() {
                         onPathTemplate = viewModel::setPathTemplate,
                         onTags = viewModel::setTags,
                         onMode = viewModel::setMode,
-                        onSilent = viewModel::setSilent,
                         onAutoReadClipboard = viewModel::setAutoReadClipboard,
                         onReturnToSource = viewModel::setReturnToSource,
                         onCleanup = viewModel::setCleanup,

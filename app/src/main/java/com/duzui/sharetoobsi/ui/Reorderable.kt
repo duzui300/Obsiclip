@@ -19,8 +19,8 @@ import kotlin.math.roundToInt
 /**
  * Holds a long-press drag so the item can follow the finger.
  *
- * The offset is measured from the slot the item currently occupies, and is reduced by
- * exactly the extents it walks past — which is what keeps the item under the finger.
+ * The offset is measured from the slot the item currently occupies and is reduced by
+ * exactly the extents it walks past, which is what keeps the item under the finger.
  */
 class ReorderState {
 
@@ -35,13 +35,24 @@ class ReorderState {
 
     private val extents = mutableMapOf<Any, Float>()
 
+    /**
+     * The dragged item's own index, owned here rather than read from the composition.
+     *
+     * A drag delivers several events per frame, so an index that only updates on
+     * recomposition is already stale by the second one — and a stale index makes the next
+     * walk start from the wrong place. That is what stopped a drag from crossing more than
+     * one item, which read as "you cannot drag the bottom one to the top".
+     */
+    private var index = 0
+
     /** Recorded by each item as it is laid out. */
     fun extent(key: Any, px: Float) {
         extents[key] = px
     }
 
-    fun begin(key: Any) {
+    fun begin(key: Any, fromIndex: Int) {
         dragging = key
+        index = fromIndex
         offset = 0f
     }
 
@@ -51,16 +62,15 @@ class ReorderState {
     }
 
     /**
-     * Adds [delta] to the drag and returns the index the item should now sit at.
+     * Adds [delta] to the drag and returns the move it implies, or null if it moved nothing.
      *
      * Walks the neighbours' measured extents rather than assuming equal sizes. Using the
      * dragged item's own size — the obvious first attempt — makes a long book name and a
-     * short one swap after different amounts of finger travel, and cannot cross two items
-     * in a single fast drag. Both of those were live bugs.
+     * short one swap after different amounts of finger travel.
      */
-    fun advance(fromIndex: Int, delta: Float): Int {
+    fun advance(delta: Float): Pair<Int, Int>? {
         offset += delta
-        var index = fromIndex
+        val from = index
 
         if (offset > 0f) {
             while (index < keys.lastIndex) {
@@ -77,7 +87,7 @@ class ReorderState {
                 index--
             }
         }
-        return index
+        return if (index != from) from to index else null
     }
 }
 
@@ -91,9 +101,8 @@ fun rememberReorderState(keys: List<Any>): ReorderState {
 /**
  * Long-press and drag to reorder, with the dragged item tracking the finger.
  *
- * [pointerInput] is keyed on Unit and the live index is read through [rememberUpdatedState]:
- * the swap this gesture causes changes the index, and keying on it would cancel the drag
- * the instant it moved something.
+ * [pointerInput] is keyed on Unit so the drag survives the swaps it causes; the index is
+ * only read once, at the start, after which [ReorderState] keeps its own.
  */
 @Composable
 fun Modifier.reorderDrag(
@@ -123,13 +132,13 @@ fun Modifier.reorderDrag(
         }
         .pointerInput(Unit) {
             detectDragGesturesAfterLongPress(
-                onDragStart = { state.begin(key) },
+                onDragStart = { state.begin(key, currentIndex) },
                 onDragEnd = { state.end() },
                 onDragCancel = { state.end() },
             ) { _, drag ->
-                val from = currentIndex
-                val to = state.advance(from, if (horizontal) drag.x else drag.y)
-                if (to != from) currentOnMove(from, to)
+                state.advance(if (horizontal) drag.x else drag.y)?.let { (from, to) ->
+                    currentOnMove(from, to)
+                }
             }
         }
 }

@@ -18,7 +18,12 @@ data class WriteRequest(
     val heading: String? = null,
     val content: String = "",
     val mode: WriteMode = WriteMode.ADVANCED,
-    val silent: Boolean = true,
+    /**
+     * Leaves the note unopened. Not a user setting: Obsidian is always pulled forward to
+     * handle the URI, so the only thing this decides is whether it lands on the note.
+     * Writes open it; creating a skeleton does not, because that is setup, not reading.
+     */
+    val silent: Boolean = false,
     /** Put the payload on the clipboard and send `clipboard=true` instead of inlining it. */
     val useClipboard: Boolean = false,
     /** Advanced URI inserts a single `\n` by default; the official action inserts `\n\n` itself. */

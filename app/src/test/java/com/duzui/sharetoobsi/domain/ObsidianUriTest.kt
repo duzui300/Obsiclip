@@ -27,7 +27,7 @@ class ObsidianUriTest {
     }
 
     @Test
-    fun `advanced uri targets the heading and appends quietly`() {
+    fun `advanced uri targets the heading and opens the note`() {
         val uri = ObsidianUri.build(
             WriteRequest(
                 vault = "random",
@@ -42,8 +42,9 @@ class ObsidianUriTest {
         assertTrue(uri.contains("filepath=30-Reading%2FBook%2F"))
         assertTrue(uri.contains("mode=append"))
         assertTrue(uri.contains("heading=Quotes%20worth%20keeping"))
-        assertTrue(uri.contains("openmode=silent"))
         assertTrue(uri.contains("separator=%0A%0A"))
+        // A write lands the user on the note it just made.
+        assertFalse(uri.contains("openmode=silent"))
     }
 
     @Test
@@ -58,9 +59,24 @@ class ObsidianUriTest {
         )
         assertTrue(uri.startsWith("obsidian://new?"))
         assertTrue(uri.contains("append=true"))
-        assertTrue(uri.contains("silent=true"))
         assertTrue(uri.contains("file=a%2Fb.md"))
+        // Opening the note is the point, so nothing asks Obsidian to stay quiet.
+        assertFalse(uri.contains("silent=true"))
         assertFalse(uri.contains("filepath="))
+    }
+
+    @Test
+    fun `silence is still available when asked for explicitly`() {
+        val uri = ObsidianUri.build(
+            WriteRequest(
+                vault = "v",
+                filePath = "n.md",
+                content = "x",
+                mode = WriteMode.ADVANCED,
+                silent = true,
+            )
+        )
+        assertTrue(uri.contains("openmode=silent"))
     }
 
     @Test

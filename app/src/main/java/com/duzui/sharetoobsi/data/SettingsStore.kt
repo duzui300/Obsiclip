@@ -21,7 +21,6 @@ data class AppSettings(
     val pathTemplate: String = Defaults.BOOK_PATH_TEMPLATE,
     val tags: String = Defaults.TAGS,
     val mode: WriteMode = WriteMode.ADVANCED,
-    val silent: Boolean = true,
     /**
      * On opening without a share — from the launcher or the quick settings tile — adopt
      * whatever is on the clipboard. This is what makes "Copy in the reader, tap the tile"
@@ -61,7 +60,6 @@ class SettingsStore(private val context: Context) {
         val pathTemplate = stringPreferencesKey("pathTemplate")
         val tags = stringPreferencesKey("tags")
         val mode = stringPreferencesKey("mode")
-        val silent = booleanPreferencesKey("silent")
         val autoReadClipboard = booleanPreferencesKey("autoReadClipboard")
         val returnToSource = booleanPreferencesKey("returnToSource")
         val defaultProfileId = stringPreferencesKey("defaultProfileId")
@@ -91,7 +89,6 @@ class SettingsStore(private val context: Context) {
             tags = prefs[Keys.tags] ?: defaults.tags,
             mode = prefs[Keys.mode]?.let { runCatching { WriteMode.valueOf(it) }.getOrNull() }
                 ?: defaults.mode,
-            silent = prefs[Keys.silent] ?: defaults.silent,
             autoReadClipboard = prefs[Keys.autoReadClipboard] ?: defaults.autoReadClipboard,
             returnToSource = prefs[Keys.returnToSource] ?: defaults.returnToSource,
             defaultProfileId = prefs[Keys.defaultProfileId] ?: defaults.defaultProfileId,
@@ -120,7 +117,6 @@ class SettingsStore(private val context: Context) {
             prefs[Keys.pathTemplate] = next.pathTemplate
             prefs[Keys.tags] = next.tags
             prefs[Keys.mode] = next.mode.name
-            prefs[Keys.silent] = next.silent
             prefs[Keys.autoReadClipboard] = next.autoReadClipboard
             prefs[Keys.returnToSource] = next.returnToSource
             prefs[Keys.defaultProfileId] = next.defaultProfileId
