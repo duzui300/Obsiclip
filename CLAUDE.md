@@ -111,10 +111,13 @@ new note beside the one it belongs in.
 rule set's own template, then the default. The target wins because it knows the vault's
 convention for that note; the rule set only knows the shape of what comes in.
 
-**Silent writing cannot mean what it sounds like.** A URI can only be handled by starting
-Obsidian, so the app is always pulled forward and `openmode=silent` can only mean "don't
-open the note". Quiet therefore also passes the `x-success` callback, and starting our own
-activity is what returns the user to the front — see `isReturnCallback` in `MainActivity`.
+**A write leaves the user on the note.** Obsidian is always pulled forward — a URI can
+only be handled by starting the app — so there is no way to write without it appearing,
+and a "silent write" setting could never mean what it sounded like. The `x-success`
+callback is the way out: it fires once Obsidian has finished, and starting our activity is
+what returns the user to the app that shared — see `isReturnCallback` in `MainActivity`.
+`WriteRequest.silent` survives but is not a user setting: only skeleton creation uses it,
+because that is setup rather than reading.
 
 **Migrations are hand-written.** Room validates the live schema against the entities on
 open, so a hand-written `CREATE TABLE` that differs by a column default crashes at
