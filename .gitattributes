@@ -1,0 +1,9 @@
+* text=auto eol=lf
+
+# The wrapper script is executed by sh; CRLF would break it.
+gradlew text eol=lf
+*.bat text eol=crlf
+
+*.jar binary
+*.png binary
+*.apk binary
