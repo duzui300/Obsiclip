@@ -61,6 +61,7 @@ fun SettingsScreen(
     onTags: (String) -> Unit,
     onMode: (WriteMode) -> Unit,
     onAutoReadClipboard: (Boolean) -> Unit,
+    onAutoWriteImports: (Boolean) -> Unit,
     onReturnToSource: (Boolean) -> Unit,
     onCleanup: (CleanupOptions) -> Unit,
     onDefaultProfileId: (String) -> Unit,
@@ -334,6 +335,12 @@ fun SettingsScreen(
                 Text(
                     "不勾选时，Obsidian 会打开刚写入的那篇笔记并停在那里。" +
                         "勾上就立刻回到你分享的地方。",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Toggle("抓取后直接写入，不过一遍", settings.autoWriteImports, onAutoWriteImports)
+                Text(
+                    "默认关。Kindle 会把长划线折叠，折叠后的样子和短划线一模一样 —— " +
+                        "开了就直接写，被折叠过的和被写过的仍然会留着让你确认。",
                     style = MaterialTheme.typography.bodySmall,
                 )
                 Toggle("打开 App 时自动读取剪贴板", settings.autoReadClipboard, onAutoReadClipboard)

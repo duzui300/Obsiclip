@@ -44,6 +44,12 @@ data class AppSettings(
      * one in the chip order, which is what most people want anyway.
      */
     val defaultTargetId: Long? = null,
+    /**
+     * Write a collected batch straight away instead of showing it for review.
+     * Off by default: a collapsed highlight reads exactly like a short one, so an
+     * unreviewed batch can quietly contain fragments.
+     */
+    val autoWriteImports: Boolean = false,
     /** The starter output formats are offered once, then belong to the user. */
     val presetFormatsSeeded: Boolean = false,
     val cleanup: CleanupOptions = CleanupOptions(),
@@ -66,6 +72,7 @@ class SettingsStore(private val context: Context) {
         val defaultTargetSeeded = booleanPreferencesKey("defaultTargetSeeded")
         val defaultTargetId = longPreferencesKey("defaultTargetId")
         val presetFormatsSeeded = booleanPreferencesKey("presetFormatsSeeded")
+        val autoWriteImports = booleanPreferencesKey("autoWriteImports")
 
         val normalize = booleanPreferencesKey("cleanup.normalize")
         val stripBoilerplate = booleanPreferencesKey("cleanup.stripBoilerplate")
@@ -95,6 +102,7 @@ class SettingsStore(private val context: Context) {
             defaultTargetSeeded = prefs[Keys.defaultTargetSeeded] ?: defaults.defaultTargetSeeded,
             defaultTargetId = prefs[Keys.defaultTargetId],
             presetFormatsSeeded = prefs[Keys.presetFormatsSeeded] ?: defaults.presetFormatsSeeded,
+            autoWriteImports = prefs[Keys.autoWriteImports] ?: defaults.autoWriteImports,
             cleanup = CleanupOptions(
                 normalize = prefs[Keys.normalize] ?: base.normalize,
                 stripBoilerplate = prefs[Keys.stripBoilerplate] ?: base.stripBoilerplate,
@@ -127,6 +135,7 @@ class SettingsStore(private val context: Context) {
                 prefs[Keys.defaultTargetId] = next.defaultTargetId
             }
             prefs[Keys.presetFormatsSeeded] = next.presetFormatsSeeded
+            prefs[Keys.autoWriteImports] = next.autoWriteImports
             prefs[Keys.normalize] = next.cleanup.normalize
             prefs[Keys.stripBoilerplate] = next.cleanup.stripBoilerplate
             prefs[Keys.stripLoneUrlLines] = next.cleanup.stripLoneUrlLines

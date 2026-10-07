@@ -17,6 +17,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.duzui.sharetoobsi.ui.HistoryScreen
+import com.duzui.sharetoobsi.ui.ImportReviewScreen
 import com.duzui.sharetoobsi.ui.SettingsScreen
 import com.duzui.sharetoobsi.ui.ShareScreen
 import com.duzui.sharetoobsi.send.accessibilitySettingsIntent
@@ -25,7 +26,7 @@ import com.duzui.sharetoobsi.ui.theme.ShareTransTheme
 
 class MainActivity : ComponentActivity() {
 
-    private enum class Screen { Share, Settings, History }
+    private enum class Screen { Share, Settings, History, Import }
 
     private var incoming by mutableStateOf<IncomingShare?>(null)
     private var screen by mutableStateOf(Screen.Share)
@@ -76,6 +77,11 @@ class MainActivity : ComponentActivity() {
                 LaunchedEffect(incoming) { viewModel.onShare(incoming) }
                 LaunchedEffect(importRequests) {
                     if (importRequests > 0) viewModel.onImportOpened()
+                }
+                // A finished collection takes over the screen; there is nothing to do with
+                // it on the capture screen, which is about one highlight.
+                LaunchedEffect(state.importEntries.isNotEmpty()) {
+                    if (state.importEntries.isNotEmpty()) screen = Screen.Import
                 }
                 LaunchedEffect(requestedTargetId) {
                     requestedTargetId?.let { id ->
@@ -132,6 +138,7 @@ class MainActivity : ComponentActivity() {
                         onTags = viewModel::setTags,
                         onMode = viewModel::setMode,
                         onAutoReadClipboard = viewModel::setAutoReadClipboard,
+                        onAutoWriteImports = viewModel::setAutoWriteImports,
                         onReturnToSource = viewModel::setReturnToSource,
                         onCleanup = viewModel::setCleanup,
                         onDefaultProfileId = viewModel::setDefaultProfileId,
@@ -151,6 +158,19 @@ class MainActivity : ComponentActivity() {
                         onDeriveSkeletonPath = viewModel::previewBookPath,
                         onOpenHistory = { screen = Screen.History },
                         onRetryOutbox = viewModel::retryOutbox,
+                    )
+
+                    Screen.Import -> ImportReviewScreen(
+                        entries = state.importEntries,
+                        targetPath = state.targetPath,
+                        onToggle = viewModel::setImportIncluded,
+                        onEdit = viewModel::setImportText,
+                        onSelectAll = viewModel::setAllImportsIncluded,
+                        onWrite = viewModel::writeImport,
+                        onDismiss = {
+                            viewModel.dismissImport()
+                            screen = Screen.Share
+                        },
                     )
 
                     Screen.History -> HistoryScreen(

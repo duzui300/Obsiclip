@@ -67,6 +67,8 @@ data class ShareUiState(
     val selectedBookId: Long? = null,
     /** Set once the user hand-edits the payload; cleared whenever an input changes. */
     val payloadOverride: String? = null,
+    /** Highlights read off Kindle's notebook screen, awaiting review. */
+    val importEntries: List<ImportEntry> = emptyList(),
 ) {
     /**
      * An explicit selection first, then the user's chosen default, then whatever sorts
@@ -105,6 +107,22 @@ data class ShareUiState(
 
     val payload: String = payloadOverride ?: Template.render(effectiveTemplate, values)
 
+    /**
+     * Values for one entry of a batch, so every highlight carries its own text and page
+     * while the book and rules stay shared. This is what makes a batch render identically
+     * to sending the same highlights one at a time.
+     */
+    fun valuesFor(entry: ImportEntry): TemplateValues = TemplateValues(
+        text = Cleanup.clean(entry.text, profile, settings.cleanup),
+        title = chosenBook?.title?.takeIf { it.isNotBlank() },
+        author = chosenBook?.author?.takeIf { it.isNotBlank() },
+        year = chosenBook?.year?.takeIf { it.isNotBlank() },
+        tags = settings.tags.ifBlank { null },
+        source = sourcePackage,
+        page = entry.page,
+        date = LocalDate.now().toString(),
+    )
+
     /** The target's path, filled from the book — one target serves every book. */
     val targetPath: String = chosenTarget
         ?.let { Template.substitute(it.path, values).trim() }
@@ -124,6 +142,20 @@ data class TargetDraft(
     val path: String = "",
     val heading: String = "",
     val formatId: Long? = null,
+)
+
+/**
+ * One collected highlight, with the two things review is for: whether it goes in, and what
+ * it says. [suspect] means Kindle's list had collapsed it and the text may be a fragment —
+ * a guess that is never written without being asked.
+ */
+data class ImportEntry(
+    val text: String,
+    val page: String? = null,
+    val suspect: Boolean = false,
+    /** The same passage is already in this note, going by what was written before. */
+    val alreadyImported: Boolean = false,
+    val included: Boolean = true,
 )
 
 /** What the add/edit book form collects. */
@@ -348,6 +380,7 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
     fun setCleanup(options: CleanupOptions) = settings { it.copy(cleanup = options) }
     fun setDefaultProfileId(value: String) = settings { it.copy(defaultProfileId = value) }
     fun setDefaultTargetId(value: Long?) = settings { it.copy(defaultTargetId = value) }
+    fun setAutoWriteImports(value: Boolean) = settings { it.copy(autoWriteImports = value) }
 
     /** Where a book's note would land, given the target currently chosen. */
     fun previewBookPath(title: String): String {
@@ -616,9 +649,103 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
     /** Called when the collector's notification brings the user back. */
     fun onImportOpened() {
         val items = container.kindleImport.items()
-        _message.value = when {
-            items.isEmpty() -> "这次没读到划线"
-            else -> "读到 ${items.size} 条"
+        if (items.isEmpty()) {
+            _message.value = "这次没读到划线"
+            return
+        }
+        viewModelScope.launch {
+            val targetPath = _state.value.targetPath
+            // Anything already written to this note is offered but not pre-selected: a
+            // second run over the same book should not silently duplicate it.
+            val seen = history.observeRecent().first()
+                .filter { it.targetPath == targetPath }
+                .map { it.payload }
+            val entries = items.map { item ->
+                val already = seen.any { it.contains(item.text.take(MATCH_LENGTH)) }
+                ImportEntry(
+                    text = item.text,
+                    page = item.page,
+                    suspect = item.suspect,
+                    alreadyImported = already,
+                    included = !already && !item.suspect,
+                )
+            }
+            _state.update { it.copy(importEntries = entries) }
+
+            if (_state.value.settings.autoWriteImports) {
+                writeImport()
+            } else {
+                _message.value = "读到 ${entries.size} 条，检查后写入"
+            }
+        }
+    }
+
+    fun setImportIncluded(index: Int, included: Boolean) = _state.update { current ->
+        current.copy(importEntries = current.importEntries.mapIndexed { i, entry ->
+            if (i == index) entry.copy(included = included) else entry
+        })
+    }
+
+    fun setImportText(index: Int, text: String) = _state.update { current ->
+        current.copy(importEntries = current.importEntries.mapIndexed { i, entry ->
+            if (i == index) entry.copy(text = text, suspect = false) else entry
+        })
+    }
+
+    fun setAllImportsIncluded(included: Boolean) = _state.update { current ->
+        current.copy(importEntries = current.importEntries.map { entry ->
+            // Un-ticking everything must stay possible; ticking everything must not
+            // resurrect the ones already in the note.
+            val safe = !entry.alreadyImported && !entry.suspect
+            entry.copy(included = included && safe)
+        })
+    }
+
+    fun dismissImport() = _state.update { it.copy(importEntries = emptyList()) }
+
+    /**
+     * Writes the chosen highlights as one append.
+     *
+     * One request rather than N: the batch either lands or it does not, a failure is a
+     * single queue entry to retry, and the separator between entries is decided once. Each
+     * entry still renders on its own, so the result is byte-for-byte what sending them
+     * separately would produce. Long batches are already handled — the sender moves
+     * anything past 16k characters onto the clipboard.
+     */
+    fun writeImport() {
+        val current = _state.value
+        val chosen = current.importEntries.filter { it.included }
+        if (chosen.isEmpty()) {
+            _message.value = "没有勾选任何条目"
+            return
+        }
+
+        val block = chosen.joinToString("\n\n") { entry ->
+            Template.render(current.effectiveTemplate, current.valuesFor(entry))
+        }
+
+        if (current.settings.returnToSource) {
+            current.sourcePackage?.let { container.pendingReturn.remember(it) }
+        }
+
+        val outcome = container.sender.send(
+            WriteRequest(
+                vault = current.settings.vault,
+                filePath = current.targetPath,
+                heading = current.effectiveHeading,
+                content = block,
+                mode = current.settings.mode,
+                successCallback = if (current.settings.returnToSource) RETURN_CALLBACK else null,
+            )
+        )
+
+        container.kindleImport.clear()
+        _state.update { it.copy(importEntries = emptyList()) }
+
+        _message.value = when (outcome) {
+            is SendOutcome.Dispatched -> "已写入 ${chosen.size} 条到 ${current.targetPath}"
+            SendOutcome.NoObsidian -> "没找到 Obsidian，整批进了待发队列"
+            is SendOutcome.Failed -> "写入失败：${outcome.message}，整批进了待发队列"
         }
     }
 
@@ -773,6 +900,8 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
          * arrives a few frames after the first composition, so the read is retried rather
          * than treating the first empty answer as "nothing to capture".
          */
+        /** How much of a quote to look for when checking whether it was written before. */
+        const val MATCH_LENGTH = 40
         const val CLIPBOARD_ATTEMPTS = 6
         const val CLIPBOARD_RETRY_MS = 250L
     }

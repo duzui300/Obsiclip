@@ -293,8 +293,10 @@ private fun ImportCard(serviceReady: Boolean, onArm: () -> Unit, onOpenSettings:
                 if (serviceReady) {
                     "在 Kindle 里打开这本书的「注解」列表，点下面的按钮，这里会自己读完它。"
                 } else {
-                    "需要先开启「无障碍」权限 —— 只能在系统设置里开，App 自己开不了。" +
-                        "它只看 Kindle，看不到别的应用。"
+                    "需要先开启无障碍权限，App 自己开不了。路径：" +
+                        "系统设置 → 无障碍 → 「已下载的服务」（部分机型叫「已安装的服务」）" +
+                        "→ 找到「从 Kindle 的注解页收集划线」→ 打开，并在弹窗里点「允许」。\n" +
+                        "注意不是页面顶部的「无障碍快捷方式」，那个是给快捷键用的。"
                 },
                 style = MaterialTheme.typography.bodySmall,
             )
