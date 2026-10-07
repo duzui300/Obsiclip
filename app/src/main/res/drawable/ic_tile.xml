@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- The same right arrow as the launcher icon, scaled to a 24dp tile. -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M3,10.8 H12.4 V8 L19,12 L12.4,16 V13.2 H3 Z" />
+</vector>

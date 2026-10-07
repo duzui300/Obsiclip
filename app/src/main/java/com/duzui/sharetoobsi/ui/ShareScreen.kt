@@ -55,7 +55,6 @@ fun ShareScreen(
     onModeChange: (WriteMode) -> Unit,
     onSelectTarget: (Long?) -> Unit,
     onAddTarget: (String, String, String, String, String, Boolean) -> Unit,
-    onCreateSkeleton: (TargetEntity) -> Unit,
     onDerivePath: (String) -> String,
     onReadClipboard: () -> Unit,
     onPayloadEdit: (String) -> Unit,
@@ -123,29 +122,6 @@ fun ShareScreen(
                 onSelectTarget = onSelectTarget,
                 onAddTarget = { addingTarget = true },
             )
-
-            state.chosenTarget?.takeIf { !it.seeded }?.let { target ->
-                // A heading that does not exist makes Obsidian write nothing and report
-                // nothing, so a brand new note needs its skeleton creating first.
-                Card(modifier = Modifier.fillMaxWidth()) {
-                    Column(
-                        modifier = Modifier.padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        Text(
-                            "Obsidian 找不到「${state.effectiveHeading ?: state.settings.heading}」" +
-                                "时会静默不写。这是本新书的话，先建骨架。",
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                        OutlinedButton(
-                            onClick = { onCreateSkeleton(target) },
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Text("新建「${target.name}」的笔记骨架（已有笔记请勿点）")
-                        }
-                    }
-                }
-            }
 
             if (state.raw.isBlank()) {
                 EmptyState(state.origin, onReadClipboard)

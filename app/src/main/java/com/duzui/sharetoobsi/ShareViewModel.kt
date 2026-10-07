@@ -127,9 +127,9 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
      * The escape hatch for shares that are too long to go through a share sheet: select in
      * the reading app, Copy, and read it here.
      */
-    fun readFromClipboard(text: String?) {
+    fun readFromClipboard(text: String?, quiet: Boolean = false) {
         if (text.isNullOrBlank()) {
-            _message.value = "剪贴板里没有文字"
+            if (!quiet) _message.value = "剪贴板里没有文字"
             return
         }
         _state.update {
@@ -137,9 +137,25 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
                 raw = text,
                 origin = "剪贴板",
                 sourcePackage = null,
-                profile = SourceProfiles.byId(it.settings.defaultProfileId),
+                profile = it.profile,
                 payloadOverride = null,
             )
+        }
+    }
+
+    /**
+     * Opened directly rather than from a share — from the launcher or the quick settings
+     * tile. Adopting whatever is on the clipboard is what makes "copy, tap the tile" work.
+     *
+     * [force] is for the tile, which exists for exactly this. Otherwise it happens only if
+     * the user turned it on, and never over text already in hand.
+     */
+    fun adoptClipboardIfEnabled(force: Boolean = false) {
+        viewModelScope.launch {
+            val settings = container.settings.settings.first()
+            if (!force && !settings.autoReadClipboard) return@launch
+            if (_state.value.raw.isNotBlank()) return@launch
+            readFromClipboard(ClipboardReader.read(getApplication()), quiet = true)
         }
     }
 
@@ -159,6 +175,7 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
     fun setTags(value: String) = settings { it.copy(tags = value) }
     fun setMode(mode: WriteMode) = settings { it.copy(mode = mode) }
     fun setSilent(value: Boolean) = settings { it.copy(silent = value) }
+    fun setAutoReadClipboard(value: Boolean) = settings { it.copy(autoReadClipboard = value) }
     fun setReturnToSource(value: Boolean) = settings { it.copy(returnToSource = value) }
     fun setCleanup(options: CleanupOptions) = settings { it.copy(cleanup = options) }
 
@@ -212,14 +229,6 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /** For a target whose note does not exist yet: the heading has to be created first. */
-    fun createSkeletonFor(target: TargetEntity) {
-        viewModelScope.launch {
-            if (writeSkeleton(target.name, target.path, target.author, target.year)) {
-                targets.markSeeded(target.id)
-            }
-        }
-    }
-
     fun deleteTarget(target: TargetEntity) {
         viewModelScope.launch { targets.delete(target.id) }
         _state.update {

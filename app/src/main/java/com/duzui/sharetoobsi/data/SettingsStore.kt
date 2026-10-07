@@ -23,6 +23,12 @@ data class AppSettings(
     val mode: WriteMode = WriteMode.ADVANCED,
     val silent: Boolean = true,
     /**
+     * On opening without a share — from the launcher or the quick settings tile — adopt
+     * whatever is on the clipboard. This is what makes "Copy in the reader, tap the tile"
+     * work without a second tap.
+     */
+    val autoReadClipboard: Boolean = true,
+    /**
      * Hand the user back to the app they shared from instead of leaving them in Obsidian.
      * Off by default: jumping away from a note the user may want to look at is rude
      * unless they asked for it.
@@ -45,6 +51,7 @@ class SettingsStore(private val context: Context) {
         val tags = stringPreferencesKey("tags")
         val mode = stringPreferencesKey("mode")
         val silent = booleanPreferencesKey("silent")
+        val autoReadClipboard = booleanPreferencesKey("autoReadClipboard")
         val returnToSource = booleanPreferencesKey("returnToSource")
         val defaultProfileId = stringPreferencesKey("defaultProfileId")
 
@@ -72,6 +79,7 @@ class SettingsStore(private val context: Context) {
             mode = prefs[Keys.mode]?.let { runCatching { WriteMode.valueOf(it) }.getOrNull() }
                 ?: defaults.mode,
             silent = prefs[Keys.silent] ?: defaults.silent,
+            autoReadClipboard = prefs[Keys.autoReadClipboard] ?: defaults.autoReadClipboard,
             returnToSource = prefs[Keys.returnToSource] ?: defaults.returnToSource,
             defaultProfileId = prefs[Keys.defaultProfileId] ?: defaults.defaultProfileId,
             cleanup = CleanupOptions(
@@ -98,6 +106,7 @@ class SettingsStore(private val context: Context) {
             prefs[Keys.tags] = next.tags
             prefs[Keys.mode] = next.mode.name
             prefs[Keys.silent] = next.silent
+            prefs[Keys.autoReadClipboard] = next.autoReadClipboard
             prefs[Keys.returnToSource] = next.returnToSource
             prefs[Keys.defaultProfileId] = next.defaultProfileId
             prefs[Keys.normalize] = next.cleanup.normalize

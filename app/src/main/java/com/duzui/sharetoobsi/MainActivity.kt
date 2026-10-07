@@ -20,6 +20,9 @@ class MainActivity : ComponentActivity() {
     private var incoming by mutableStateOf<IncomingShare?>(null)
     private var showSettings by mutableStateOf(false)
 
+    /** Bumped each time the quick settings tile asks for a clipboard capture. */
+    private var tileRequests by mutableStateOf(0)
+
     private val container by lazy { AppContainer(this) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -32,6 +35,9 @@ class MainActivity : ComponentActivity() {
         }
 
         incoming = readIncoming()
+        val openedWithoutShare = incoming == null
+        if (isFromTile(intent)) tileRequests = 1
+
         setContent {
             ShareTransTheme {
                 val viewModel: ShareViewModel = viewModel()
@@ -39,6 +45,14 @@ class MainActivity : ComponentActivity() {
                 val message by viewModel.message.collectAsStateWithLifecycle()
 
                 LaunchedEffect(incoming) { viewModel.onShare(incoming) }
+                LaunchedEffect(tileRequests) {
+                    when {
+                        // The tile exists to capture the clipboard, so it always does.
+                        tileRequests > 0 -> viewModel.adoptClipboardIfEnabled(force = true)
+                        // Opening the app directly may adopt it, if the user asked for that.
+                        openedWithoutShare -> viewModel.adoptClipboardIfEnabled()
+                    }
+                }
 
                 if (showSettings) {
                     SettingsScreen(
@@ -53,6 +67,7 @@ class MainActivity : ComponentActivity() {
                         onTags = viewModel::setTags,
                         onMode = viewModel::setMode,
                         onSilent = viewModel::setSilent,
+                        onAutoReadClipboard = viewModel::setAutoReadClipboard,
                         onReturnToSource = viewModel::setReturnToSource,
                         onCleanup = viewModel::setCleanup,
                         onSaveTarget = viewModel::addTarget,
@@ -68,7 +83,6 @@ class MainActivity : ComponentActivity() {
                         onModeChange = viewModel::setMode,
                         onSelectTarget = viewModel::selectTarget,
                         onAddTarget = viewModel::addTarget,
-                        onCreateSkeleton = viewModel::createSkeletonFor,
                         onDerivePath = viewModel::previewPath,
                         onReadClipboard = {
                             viewModel.readFromClipboard(ClipboardReader.read(this@MainActivity))
@@ -91,8 +105,15 @@ class MainActivity : ComponentActivity() {
             returnToSourceApp()
             return
         }
+        if (isFromTile(intent)) {
+            tileRequests++
+            return
+        }
         incoming = readIncoming()
     }
+
+    private fun isFromTile(intent: Intent?): Boolean =
+        intent?.getBooleanExtra(EXTRA_FROM_TILE, false) == true
 
     /** Obsidian hands control back on this URI once the write is done. */
     private fun isReturnCallback(intent: Intent?): Boolean =
@@ -138,7 +159,10 @@ class MainActivity : ComponentActivity() {
     private fun sourcePackage(): String? =
         referrer?.host ?: referrer?.authority
 
-    private companion object {
-        const val RETURN_SCHEME = "sharetoobsi"
+    companion object {
+        private const val RETURN_SCHEME = "sharetoobsi"
+
+        /** Set by [com.duzui.sharetoobsi.ui.QuoteTileService] to ask for a clipboard capture. */
+        const val EXTRA_FROM_TILE = "fromTile"
     }
 }

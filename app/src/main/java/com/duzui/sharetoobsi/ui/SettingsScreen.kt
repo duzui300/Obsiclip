@@ -51,6 +51,7 @@ fun SettingsScreen(
     onTags: (String) -> Unit,
     onMode: (WriteMode) -> Unit,
     onSilent: (Boolean) -> Unit,
+    onAutoReadClipboard: (Boolean) -> Unit,
     onReturnToSource: (Boolean) -> Unit,
     onCleanup: (CleanupOptions) -> Unit,
     onSaveTarget: (String, String, String, String, String, Boolean) -> Unit,
@@ -126,6 +127,12 @@ fun SettingsScreen(
                 style = MaterialTheme.typography.bodySmall,
             )
             Toggle("静默写入（不跳到 Obsidian）", settings.silent, onSilent)
+            Toggle("打开 App 时自动读取剪贴板", settings.autoReadClipboard, onAutoReadClipboard)
+            Text(
+                "只在从桌面或磁贴打开时生效；由分享进入时不受影响。" +
+                    "快捷设置磁贴始终读取剪贴板。",
+                style = MaterialTheme.typography.bodySmall,
+            )
             Toggle("写入后返回来源 App", settings.returnToSource, onReturnToSource)
 
             Section("清洗流水线")
