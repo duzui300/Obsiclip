@@ -17,7 +17,7 @@ There is **no `java`, `gradle`, or `adb` on `PATH`** on this machine. Use absolu
 
 ```bash
 export JAVA_HOME="D:/DevEnv/AndroidStudioMy/jbr"          # Android Studio's bundled JBR 21
-./gradlew :app:testDebugUnitTest                          # 37 pure-logic tests, no device needed
+./gradlew :app:testDebugUnitTest                          # 42 pure-logic tests, no device needed
 ./gradlew :app:assembleDebug
 "$LOCALAPPDATA/Android/Sdk/platform-tools/adb.exe" install -r app/build/outputs/apk/debug/app-debug.apk
 ```
@@ -82,9 +82,12 @@ domain/     pure Kotlin, no Android — the whole pipeline, covered by JVM tests
   Template       {placeholder} rendering, with empty-value pruning
   ObsidianUri    builds both URIs; percent-encoding rules live here
   SourceProfile  share-chrome rules (universal) plus Kindle's own
+  UserProfile    compiles the rules a user wrote, naming the ones that do not parse
 send/       ObsidianSender: dispatch, clipboard fallback above 16k chars, failure kinds
-data/       Room (targets/history/outbox) + DataStore (settings)
-ui/         Compose: ShareScreen, SettingsScreen, AddTargetDialog
+            ShareShortcuts: pushes saved targets as Direct Share targets
+data/       Room (targets/profiles/app_profiles/history/outbox) + DataStore (settings)
+ui/         Compose: ShareScreen, SettingsScreen, AddTargetDialog, ProfileEditorDialog,
+            HistoryScreen, QuoteTileService
 ```
 
 `domain/` deliberately has no Android dependency. Keep it that way — it is why the
@@ -96,10 +99,14 @@ row. The book name is never inferred from the share text: one misread title file
 highlight into a new note beside the one it belongs in, and the right target is usually
 already saved.
 
+**Migrations are hand-written.** Room validates the live schema against the entities on
+open, so a hand-written `CREATE TABLE` that differs by a column default crashes at
+runtime. The two things that bite: a non-null column with no `@ColumnInfo(defaultValue)`
+must be created without `DEFAULT`, and `ALTER TABLE ADD COLUMN` on a non-null column
+*requires* one. Check on a device — a unit test cannot see this.
+
 ## Known gaps
 
-- The outbox has storage and a retry button, but no dedicated history screen yet.
-- No Direct Share shortcuts (static `shortcuts.xml`) yet.
-- Profiles are the two built-ins; user-defined profiles and a per-app mapping are not built.
+- No rule preview: the settings editor cannot replay a sample share through the rules.
 - `x-success` is used only to return the user to the source app; it is not treated as a
   write receipt, for the reason above.
