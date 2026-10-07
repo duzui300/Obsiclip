@@ -177,7 +177,7 @@ private fun DestinationSection(
                 modifier = Modifier.horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                val reorder = rememberReorderState(state.savedTargets.map { it.id })
+                val reorder = rememberReorderState(state.savedTargets.size)
 
                 state.savedTargets.forEachIndexed { index, target ->
                     FilterChip(
@@ -230,7 +230,7 @@ private fun BookSection(
                 modifier = Modifier.horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                val reorder = rememberReorderState(state.savedBooks.map { it.id })
+                val reorder = rememberReorderState(state.savedBooks.size)
 
                 state.savedBooks.forEachIndexed { index, book ->
                     FilterChip(

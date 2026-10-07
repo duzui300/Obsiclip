@@ -19,8 +19,11 @@ import kotlin.math.roundToInt
 /**
  * Holds a long-press drag so the item can follow the finger.
  *
- * The offset is measured from the slot the item currently occupies and is reduced by
- * exactly the extents it walks past, which is what keeps the item under the finger.
+ * Compose reuses a composition slot by *position*, not by identity. Everything here is
+ * therefore addressed by position: the drag's own index, and the measured extents. Keying
+ * either by item id leaves a slot holding the previous occupant's value once the order
+ * changes, and the item that follows the finger stops being the one being dragged — while
+ * the reorder itself still lands correctly, so it reads as a purely visual glitch.
  */
 class ReorderState {
 
@@ -30,24 +33,24 @@ class ReorderState {
     var offset by mutableFloatStateOf(0f)
         private set
 
-    /** The order as composed, so a walk knows what comes next. */
-    var keys: List<Any> = emptyList()
+    /** Item count as composed, so a walk knows where the list ends. */
+    var itemCount: Int = 0
 
-    private val extents = mutableMapOf<Any, Float>()
+    private val extents = mutableMapOf<Int, Float>()
 
     /**
      * The dragged item's own index, owned here rather than read from the composition.
      *
      * A drag delivers several events per frame, so an index that only updates on
      * recomposition is already stale by the second one — and a stale index makes the next
-     * walk start from the wrong place. That is what stopped a drag from crossing more than
-     * one item, which read as "you cannot drag the bottom one to the top".
+     * walk start from the wrong place. That is what stopped a drag crossing more than one
+     * item, which read as "you cannot drag the bottom one to the top".
      */
     private var index = 0
 
-    /** Recorded by each item as it is laid out. */
-    fun extent(key: Any, px: Float) {
-        extents[key] = px
+    /** Recorded by each item as it is laid out, against the position it occupies. */
+    fun extent(position: Int, px: Float) {
+        extents[position] = px
     }
 
     fun begin(key: Any, fromIndex: Int) {
@@ -73,15 +76,15 @@ class ReorderState {
         val from = index
 
         if (offset > 0f) {
-            while (index < keys.lastIndex) {
-                val next = extents[keys[index + 1]] ?: break
+            while (index < itemCount - 1) {
+                val next = extents[index + 1] ?: break
                 if (offset < next) break
                 offset -= next
                 index++
             }
         } else {
             while (index > 0) {
-                val previous = extents[keys[index - 1]] ?: break
+                val previous = extents[index - 1] ?: break
                 if (-offset < previous) break
                 offset += previous
                 index--
@@ -92,17 +95,18 @@ class ReorderState {
 }
 
 @Composable
-fun rememberReorderState(keys: List<Any>): ReorderState {
+fun rememberReorderState(itemCount: Int): ReorderState {
     val state = remember { ReorderState() }
-    state.keys = keys
+    state.itemCount = itemCount
     return state
 }
 
 /**
  * Long-press and drag to reorder, with the dragged item tracking the finger.
  *
- * [pointerInput] is keyed on Unit so the drag survives the swaps it causes; the index is
- * only read once, at the start, after which [ReorderState] keeps its own.
+ * [pointerInput] is keyed on Unit so the drag survives the swaps it causes, which means the
+ * key and index it reads must be live values rather than what they were when the block was
+ * built — hence [rememberUpdatedState] on both.
  */
 @Composable
 fun Modifier.reorderDrag(
@@ -112,6 +116,7 @@ fun Modifier.reorderDrag(
     horizontal: Boolean,
     onMove: (from: Int, to: Int) -> Unit,
 ): Modifier {
+    val currentKey by rememberUpdatedState(key)
     val currentIndex by rememberUpdatedState(index)
     val currentOnMove by rememberUpdatedState(onMove)
     val active = state.dragging == key
@@ -128,11 +133,11 @@ fun Modifier.reorderDrag(
             }
         }
         .onSizeChanged { size ->
-            state.extent(key, (if (horizontal) size.width else size.height).toFloat())
+            state.extent(currentIndex, (if (horizontal) size.width else size.height).toFloat())
         }
         .pointerInput(Unit) {
             detectDragGesturesAfterLongPress(
-                onDragStart = { state.begin(key, currentIndex) },
+                onDragStart = { state.begin(currentKey, currentIndex) },
                 onDragEnd = { state.end() },
                 onDragCancel = { state.end() },
             ) { _, drag ->

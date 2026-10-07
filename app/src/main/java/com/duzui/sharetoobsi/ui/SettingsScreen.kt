@@ -214,7 +214,7 @@ fun SettingsScreen(
                     Text("长按拖动排序，和写入界面的顺序一致。", style = MaterialTheme.typography.bodySmall)
                 }
 
-                val targetReorder = rememberReorderState(state.savedTargets.map { it.id })
+                val targetReorder = rememberReorderState(state.savedTargets.size)
                 state.savedTargets.forEachIndexed { index, target ->
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -264,7 +264,7 @@ fun SettingsScreen(
                     Text("长按拖动排序，和写入界面的顺序一致。", style = MaterialTheme.typography.bodySmall)
                 }
 
-                val bookReorder = rememberReorderState(state.savedBooks.map { it.id })
+                val bookReorder = rememberReorderState(state.savedBooks.size)
                 state.savedBooks.forEachIndexed { index, book ->
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
