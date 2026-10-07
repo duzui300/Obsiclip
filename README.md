@@ -1,14 +1,16 @@
-# 摘录入 Obsidian
+# 拾曜Obsiclip
 
-一个 Android 分享中转 App：在任意 App 里分享划选的文字（或整篇笔记），
-它按预设规则清洗、套模板，再写进 Obsidian 指定笔记的指定小节。
+> **English** · [中文](README.zh.md)
 
-为一条真实工作流而做：**在 Kindle 里划一句 → 分享 → 落到对应书目笔记的
-`## Quotes worth keeping` 下**，全程不用打字。
+An Android share target: share a highlight from any app, and it is cleaned, run through a
+template, and appended to a named note in your Obsidian vault.
 
-## 它做了什么
+Built for one real workflow: **highlight a line in Kindle → share → it lands under
+`## Quotes worth keeping` in the right book note**, without typing anything.
 
-Kindle 分享出来的原文长这样：
+## What it does
+
+A Kindle share looks like this:
 
 ```
 我在 平野啓一郎 所著的《本心 (Japanese Edition)》中讀到以下這段引述時，就想到您：
@@ -16,142 +18,127 @@ Kindle 分享出来的原文长这样：
 開始免費閱讀這本書：https://read.amazon.co.jp/kp/kshare?asin=B092J53NPG&ref_=kar_wh_ca
 ```
 
-App 会：
+The app:
 
-1. **丢掉杂质** —— 分享面板的引言行（`我在 … 所著的《…》中讀到…`）、
-   `開始免費閱讀這本書：https://…` 这类「说明文字＋链接」尾行、
-   只有链接的行，全部删掉，只剩引用本身。
-2. **合并硬换行** —— 被 EPUB/PDF 按屏幕宽度切断的句子重新接回一行
-   （中日文不补空格，英文补空格，英文断词连字符也会接回去）。
-3. **套模板并预览** —— 生成 `> 「僕にはまだ、お母さんが必要なんだよ。」`
-   加一行出处 `> — 平野啓一郎《本心》 #reading`，发送前可随手改。
-4. **写进你选的笔记** —— 去处从芯片里点：`收件箱`，或你自己加的书目。
-   通过 `obsidian://` 交给 Obsidian 自己写，不碰文件系统，链接和索引都不会乱。
+1. **Strips the wrapping** — the share preamble, the store link, any line that is nothing
+   but a URL, and "label + link" footers. Only the quote survives.
+2. **Rejoins hard-wrapped lines** — sentences broken by EPUB/PDF line width come back
+   together, with no space for CJK and a space for Latin scripts, de-hyphenating words that
+   were split across lines.
+3. **Renders a template and previews it** — `> 「僕にはまだ、お母さんが必要なんだよ。」`
+   plus a source line `> — 平野啓一郎《本心》 #reading`, both editable before you send.
+4. **Writes where you chose** — through `obsidian://`, so Obsidian does the writing and its
+   own links and index stay consistent.
 
-**书名不靠猜。** 从分享文本里自动识别书名看着很美，但认错一次就会把摘录写进
-一篇新建的错误笔记，而正确的笔记往往就在旁边。所以改成：**去处和书分开选** ——
-书名只需在「书籍」里描述一次（书名/作者/年份），写到哪由「目的地」决定。
-把正在读的几本书在设置里一次加好，之后分享就是点两下芯片。
+**The book is never guessed.** Reading a title out of the share text looks clever right up
+until it misreads one, and files a highlight into a brand new note beside the one it
+belongs in. So destination and book are chosen separately: describe a book once (title,
+author, year) and let the destination decide where it goes.
 
-## 构建与安装
-
-这台机器上 `PATH` 里没有 `java` / `gradle` / `adb`，要用绝对路径：
+## Build
 
 ```bash
-export JAVA_HOME="D:/DevEnv/AndroidStudioMy/jbr"
-./gradlew :app:testDebugUnitTest          # 42 个纯逻辑单测，不需要设备
+export JAVA_HOME="/path/to/Android Studio/jbr"
+./gradlew :app:testDebugUnitTest     # 42 pure-logic tests, no device needed
 ./gradlew :app:assembleDebug
-"$LOCALAPPDATA/Android/Sdk/platform-tools/adb.exe" install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-版本矩阵锁定在本机 Gradle 缓存里已有的组合（AGP 8.2.2 / Kotlin 1.9.22 /
-Compose 1.5.10 / compileSdk 34），干净构建不需要下载任何新依赖。
+Pinned to AGP 8.2.2 / Kotlin 1.9.22 / Compose 1.5.10 / compileSdk 34 / minSdk 26.
 
-**安装被拒（`INSTALL_FAILED_USER_RESTRICTED`）** 是 HyperOS 的 USB 安装确认弹窗
-没点到，不是包坏了 —— 重跑一次并留意手机屏幕。
+## Use
 
-## 使用
+Share text from any app, or pick this app from the「Process text」entry in the text-selection
+toolbar. From the top:
 
-从任意 App 分享一段文字，或用文本选择菜单里的「处理文本」，选「摘录入 Obsidian」。
-界面从上到下：
+- **Write to Obsidian** — the send button sits first, under the app bar. The text has
+  usually already arrived processed, so sending should never require a scroll.
+- **Where it goes** — a row of chips. A path may contain `{title}` and friends, so one
+  "book notes" destination serves every book. Shows the resolved path and section.
+- **What you're reading** — a second row. Title, author and year only; it decides nothing
+  about where the words land.
+- Both rows, and both lists in settings, **reorder by long-press and drag**, and they share
+  one order.
+- **What will be written** — editable; your edit sticks until you change something else.
+- **Cleaning rules** — at the bottom. Write mode lives in settings; it is a set-once choice.
 
-- **写入 Obsidian** —— 大按钮放在最上面：多数时候文本已经处理好了，一进来就能点。
-- **写到哪** —— 一行芯片选目的地。路径可以用 `{title}` 之类占位符，
-  所以一条「书目笔记」就够所有书用。显示会落到哪个路径、追加到哪一小节。
-- **在读哪本** —— 另一行芯片选书籍。只提供书名/作者/年份，不决定写到哪。
-  两行**长按都可以左右拖动排序**，顺序和设置里的上下顺序一致。
-  目的地和书籍是两件独立的事：书只需描述一次，去哪由目的地决定。
-- **将写入的内容** —— 发送前可改，改了会保留；动其它设置会重新生成。
-- **清洗规则** —— 放在最下面，平时不用管。**写入方式在设置里**，是设一次就不用动的东西。
+### When a share sheet refuses (common with Kindle)
 
-（「新建书目骨架」在 在读哪本 那行的 `＋` 表单里，会写明将写到哪个路径 —— 已存在的笔记别勾。）
+Kindle's own share refuses a long selection. Three ways around it, in order of convenience:
 
-### 分享面板有长度限制时（Kindle 常见）
+1. **Quick Settings tile** — pull down the shade, tap Obsiclip, and the clipboard lands in
+   the app.
+2. **Read on open** — opening the app from the launcher adopts the clipboard (can be turned off).
+3. **「Read clipboard」** by hand.
 
-Kindle 内置分享在选中内容较长时会直接拒绝分享。三条绕法，按顺手程度：
+All three are: select in the reading app → **Copy** → come back. Kindle's Copy is also
+cleaner than its share — no preamble and no store link, so there is less to strip.
+(Android 10+ only serves the clipboard to the focused app, which is why a tap is required.)
 
-1. **快捷设置磁贴** —— 下拉通知栏点「摘录入 Obsidian」，剪贴板内容直接进 App。
-2. **打开 App 自动读取** —— 从桌面打开时自动吃剪贴板（设置里可关）。
-3. **手动点「从剪贴板读取」**。
+### Direct Share chips
 
-三条都是：在 Kindle 里选中文字 → **复制** → 回来。比分享还干净 ——
-Kindle 的「复制」不附引言行和商城链接，少一层杂质要洗。
-（Android 10+ 只允许前台应用读剪贴板，所以读取必须由你点一下触发。）
+Saved destinations appear as **Direct Share targets** in the share sheet. Tapping one writes
+straight through **without opening this app at all** (it reuses the last book you chose).
 
-### 分享面板里的快捷芯片
+### Experimental: importing from Kindle's notebook screen
 
-加过的目的地会作为 **Direct Share 快捷芯片**出现在分享面板顶部，
-点它直接就写，**根本不用打开本 App**（书籍沿用上次选的那本）。
+Kindle forbids selecting a long passage in the reading view, so sharing one and copying one
+both fail. The notebook screen is different: **each highlight sits in the accessibility tree
+as plain text**, so reading it sidesteps the restriction — no selection, no clipboard.
 
-### 实验功能：从 Kindle 注解页整批抓取
+**Settings → Experimental → Start collecting** → open the notebook page in Kindle → it
+scrolls to the end by itself and reads it → open the review from the notification or from
+settings.
 
-Kindle 在阅读界面**禁止选择长段落** —— 所以整段分享和复制都会失败。而「注解」页把每条
-划线当普通文字放进无障碍树，**直接读它就行**：不需要选择，也不需要剪贴板。
+- **Needs the accessibility permission**, which only you can grant, in system settings. The
+  service is restricted to Kindle, so it cannot observe any other app.
+- **Review first by default.** Kindle collapses long highlights in that list, and a
+  collapsed one looks exactly like a short one — silent truncation is the worst failure
+  here, so anything that ends like a truncation, or is already in the note, is left un-ticked.
+- **Experimental.** The heuristics read screen structure, so a Kindle redesign may break it.
 
-**设置 → 实验功能 → 开始抓取** → 切到 Kindle 打开这本书的注解页 → 它会自己滚到底读完 →
-从通知或设置进入检查页。
+## Writing to Obsidian
 
-- **要开无障碍权限**，只能你自己在系统设置里开。服务被限定为**只能看 Kindle**，看不到别的应用。
-- **默认先过一遍再写。** Kindle 会折叠长划线，而折叠后的样子和短划线**一模一样** ——
-  静默截断是这里最坏的失败，所以收尾像断掉的、以及这篇笔记里已经有的，一律不默认勾选。
-- **这是实验功能。** 判据是按屏幕结构写的，Kindle 改版后可能失效。
+Two paths, both measured on a real device:
 
-## 写入方式
-
-两条路径，都在真机上实测过：
-
-| | Advanced URI | 官方 URI |
+| | Advanced URI | Built-in URI |
 | --- | --- | --- |
-| 需要插件 | 是（Advanced URI） | 否 |
-| 能定位到小节 | ✅ | ❌ 只能追加到文件末尾 |
-| 长文本 | 剪贴板兜底 | 剪贴板兜底 |
+| Needs a plugin | Yes (Advanced URI) | No |
+| Can target a section | ✅ | ❌ appends to end of file |
+| Long content | clipboard fallback | clipboard fallback |
 
-默认走 Advanced URI。**没装插件时请在设置里切到官方 URI。**
+Advanced URI is the default. **Without the plugin, switch to the built-in URI in settings.**
 
-> ⚠️ 两个实测出来的坑（官方文档没写）：
-> - 官方 URI **不带 `append=true` 时，对已存在的文件是静默空操作** —— 不报错、什么都不写。
-> - Advanced URI **找不到指定小节时也是静默空操作**，连 `x-error` 都不触发。
->  所以新书要在添加书籍时勾「同时创建笔记骨架」，否则写入会悄悄落空。
+> ⚠️ Two things the documentation does not say, both measured:
+> - The built-in URI **without `append=true` is a silent no-op on an existing file** — no
+>   error, no change.
+> - Advanced URI **does nothing, and reports nothing, when the target section is missing**.
+> - So a brand new book needs its note skeleton created first, or the write quietly fails.
 
-## 设置
+## Settings
 
-设置分节可折叠，点标题展开/收起。
+Sections fold away behind their titles, all collapsed by default.
 
-- **目的地**：写到哪里、写到哪个小节、用哪种格式。**默认收件箱**也在这里指定。
-  书目的路径是模板，所以一条「书目笔记」就够所有书用。
-- **书籍**：书名 / 作者 / 年份。只管「在读什么」，不决定写到哪。
-- **输出格式**：默认格式模板 + **任意多个命名格式预设**。每个目的地可以在创建时
-  （或之后编辑时）选用其中一个。优先级：目的地选的格式 > 规则自带的模板 > 默认格式。
-- **写入方式**：Advanced / 官方、打开时读剪贴板、写入后返回来源 App
-- **写入目标**：vault 名、默认小节标题、新目的地的默认路径
-- **清洗流水线**：每个步骤独立开关，外加一个「默认规则」下拉
-- **自定义规则**：自己写正则。`删除整行的规则` / `行内删除的规则` 各一行一条；
-  还能给这套规则配一个自己的输出模板。**正则写错会在编辑器里点名报错**，
-  而不是悄悄不生效 —— 一条永远匹配不到的正则看起来和好用的一模一样。
-- **按 App 指定规则**：把某个来源 App 固定到某套规则。不指定时按包名自动匹配，
-  认不出来就用默认规则。优先级：指定 > 包名匹配 > 默认。
-- **记录**：发送历史 + 待发队列
+- **Destinations** — path, section, output format. The default destination is chosen here.
+  Paths are templates, so one destination serves every book.
+- **Books** — title / author / year, and nothing about where they go.
+- **Output formats** — a default template plus any number of named presets a destination can
+  pick. Precedence: the destination's format, then the rule set's own template, then the
+  default.
+- **Write mode** — Advanced / built-in URI, read clipboard on open, return to the source app.
+- **Cleaning pipeline** — every stage independently switchable, plus a default rule set.
+- **Custom rules** — write your own regexes. **A rule that does not compile is named in the
+  editor**, rather than silently doing nothing: a regex that never matches looks exactly
+  like one that works.
+- **Per-app rules** — pin a source app to a rule set. Precedence: pinned, then package match,
+  then default.
+- **History** — what was sent, where it landed, whether it worked, and a re-send.
 
-两行芯片（目的地 / 书籍）和设置里对应的两个列表都可以**长按拖动排序**，顺序一致；
-点铅笔随时改，包括加完之后再改。`收件箱` 就是一个普通目的地 ——
-可以改名、改路径、挪位置、删掉，没有特殊待遇。
+> **A write leaves you on the note.** Obsidian is always pulled forward — a URI can only be
+> handled by starting the app — so there is no way to write without it appearing. To go back
+> where you came from, turn on "return to the source app": it uses Obsidian's `x-success`
+> callback, which fires once the write is done.
 
-> **写入后会停在刚写的那篇笔记上。** Obsidian 一定会被拉到前台 —— URI 只能由它自己
-> 处理，这是 Android 的机制，绕不开。不想停在那里就开「写入后返回来源 App」：
-> 写完之后立刻回到你分享的地方。
->
-> 这靠的是 Obsidian 处理完 URI 后回调我们自己的 `sharetoobsi://` 信号 ——
-> 这是唯一能确定「Obsidian 已经处理完」的时机。
+## License
 
-## 待做
-
-暂时没有了。想加的话：
-
-- 历史记录按目标 / 来源筛选
-- 规则的可视化预览（拿一段真实分享文本试跑，看每步删了什么）
-- 批量导入 Amazon Notebook 网页导出的划线
-
-## 相关
-
-写入约定、Bases 坑、frontmatter schema 以你 vault 里的 `Vault Guide.md` 为准。
-构建环境、`obsidian://` 实测行为、代码布局见 `CLAUDE.md`。
+[GNU AGPL-3.0](LICENSE). Use it, change it, share it — anyone distributing it, or running a
+modified version as a network service, must publish their source under the same terms.

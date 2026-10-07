@@ -106,7 +106,7 @@ fun ShareScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("摘录入 Obsidian") },
+                title = { Text("拾曜Obsiclip") },
                 actions = {
                     IconButton(onClick = onOpenSettings) {
                         Icon(Icons.Filled.Settings, contentDescription = "设置")
