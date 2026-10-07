@@ -5,7 +5,12 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.os.Build
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.os.SystemClock
+import androidx.core.content.ContextCompat
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.core.app.NotificationCompat
@@ -31,6 +36,9 @@ import kotlinx.coroutines.launch
  * Everything here is identified by structure, never by wording. Kindle's UI strings are
  * localised, so matching on `新增備註` or `Page 221` would tie this to one language.
  */
+/** Sent by the app the moment it arms, because no event can be relied on to follow. */
+const val ACTION_ARM_KINDLE_IMPORT = "com.duzui.sharetoobsi.ARM_KINDLE_IMPORT"
+
 class KindleNotebookService : AccessibilityService() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -44,10 +52,32 @@ class KindleNotebookService : AccessibilityService() {
     private var notebookSeen = false
     private var lastAttemptAt = 0L
 
+    /**
+     * How long after arming the service will keep looking for the notebook.
+     *
+     * Waiting for a window change is not enough: if the user is *already* on the notebook
+     * page, switching back to Kindle changes nothing about which window is up, so no event
+     * arrives and the run never starts. Bounded, backgrounded and throttled, so this cannot
+     * become the stall that reading the tree on every event used to cause.
+     */
+    private var watchingUntil = 0L
+
+    private val armReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            watchingUntil = SystemClock.elapsedRealtime() + WATCH_WINDOW_MS
+        }
+    }
+
     override fun onServiceConnected() {
         super.onServiceConnected()
         store = KindleImportStore(this)
         store.connected = true
+        ContextCompat.registerReceiver(
+            this,
+            armReceiver,
+            IntentFilter(ACTION_ARM_KINDLE_IMPORT),
+            ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
     }
 
     override fun onUnbind(intent: android.content.Intent?): Boolean {
@@ -58,6 +88,7 @@ class KindleNotebookService : AccessibilityService() {
     override fun onInterrupt() = Unit
 
     override fun onDestroy() {
+        runCatching { unregisterReceiver(armReceiver) }
         scope.cancel()
         super.onDestroy()
     }
@@ -76,7 +107,9 @@ class KindleNotebookService : AccessibilityService() {
         // observed app — and when the window on top is not one this service may read, it
         // waits out the full timeout. Doing that here stalls the whole accessibility
         // pipeline, which is what made the device feel stuck.
-        if (!store.armed || running || !notebookSeen) return
+        val watching = SystemClock.elapsedRealtime() < watchingUntil
+        if (!store.armed || running) return
+        if (!notebookSeen && !watching) return
         val now = SystemClock.elapsedRealtime()
         if (now - lastAttemptAt < ATTEMPT_INTERVAL_MS) return
         lastAttemptAt = now
@@ -296,6 +329,7 @@ class KindleNotebookService : AccessibilityService() {
         const val SCROLL_SETTLE_MS = 350L
         /** Floor between tree reads, so a burst of events cannot pile them up. */
         const val ATTEMPT_INTERVAL_MS = 800L
+        const val WATCH_WINDOW_MS = 40_000L
 
         const val CHANNEL_ID = "kindle_import"
         const val NOTIFICATION_ID = 4711

@@ -80,6 +80,9 @@ class MainActivity : ComponentActivity() {
                 }
                 // A finished collection takes over the screen; there is nothing to do with
                 // it on the capture screen, which is about one highlight.
+                LaunchedEffect(screen) {
+                    if (screen == Screen.Settings) viewModel.refreshPendingImport()
+                }
                 LaunchedEffect(state.importEntries.isNotEmpty()) {
                     if (state.importEntries.isNotEmpty()) screen = Screen.Import
                 }
@@ -112,14 +115,6 @@ class MainActivity : ComponentActivity() {
                         onDeriveSkeletonPath = viewModel::previewBookPath,
                         onReadClipboard = {
                             viewModel.readFromClipboard(ClipboardReader.read(this@MainActivity))
-                        },
-                        kindleServiceReady = kindleServiceReady,
-                        onArmKindleImport = {
-                            askForNotificationPermission()
-                            viewModel.armKindleImport()
-                        },
-                        onOpenAccessibilitySettings = {
-                            startActivity(accessibilitySettingsIntent())
                         },
                         onPayloadEdit = viewModel::editPayload,
                         onRegenerate = viewModel::regenerate,
@@ -156,6 +151,15 @@ class MainActivity : ComponentActivity() {
                         onSaveFormat = viewModel::saveFormat,
                         onDeleteFormat = viewModel::deleteFormat,
                         onDeriveSkeletonPath = viewModel::previewBookPath,
+                        kindleServiceReady = kindleServiceReady,
+                        onArmKindleImport = {
+                            askForNotificationPermission()
+                            viewModel.armKindleImport()
+                        },
+                        onOpenAccessibilitySettings = {
+                            startActivity(accessibilitySettingsIntent())
+                        },
+                        onOpenPendingImport = viewModel::onImportOpened,
                         onOpenHistory = { screen = Screen.History },
                         onRetryOutbox = viewModel::retryOutbox,
                     )

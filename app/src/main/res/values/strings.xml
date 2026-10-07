@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">摘录入 Obsidian</string>
+    <string name="app_name">拾曜Obsiclip</string>
 
     <!-- Accessibility service that reads Kindle's notebook screen. -->
     <string name="kindle_service_summary">从 Kindle 的注解页收集划线</string>

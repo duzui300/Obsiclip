@@ -4,7 +4,9 @@ import android.content.Context
 import android.content.Intent
 import androidx.core.content.pm.ShortcutInfoCompat
 import androidx.core.content.pm.ShortcutManagerCompat
+import androidx.core.graphics.drawable.IconCompat
 import com.duzui.sharetoobsi.MainActivity
+import com.duzui.sharetoobsi.R
 import com.duzui.sharetoobsi.data.TargetEntity
 
 /**
@@ -32,6 +34,8 @@ object ShareShortcuts {
     private fun shortcut(context: Context, target: TargetEntity): ShortcutInfoCompat =
         ShortcutInfoCompat.Builder(context, "target-${target.id}")
             .setShortLabel(target.name)
+            // Without an icon the share sheet shows a blank grey square.
+            .setIcon(IconCompat.createWithResource(context, R.drawable.ic_book))
             .setLongLived(true)
             .setIntent(
                 Intent(context, MainActivity::class.java)

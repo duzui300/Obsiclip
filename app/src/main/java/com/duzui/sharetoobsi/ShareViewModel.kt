@@ -22,6 +22,7 @@ import com.duzui.sharetoobsi.domain.WriteMode
 import com.duzui.sharetoobsi.domain.WriteRequest
 import com.duzui.sharetoobsi.domain.userProfile
 import com.duzui.sharetoobsi.domain.userProfileId
+import com.duzui.sharetoobsi.send.ACTION_ARM_KINDLE_IMPORT
 import com.duzui.sharetoobsi.send.SendOutcome
 import com.duzui.sharetoobsi.send.ShareShortcuts
 import java.time.LocalDate
@@ -69,6 +70,8 @@ data class ShareUiState(
     val payloadOverride: String? = null,
     /** Highlights read off Kindle's notebook screen, awaiting review. */
     val importEntries: List<ImportEntry> = emptyList(),
+    /** A finished run the user has not looked at yet. */
+    val pendingImportCount: Int = 0,
 ) {
     /**
      * An explicit selection first, then the user's chosen default, then whatever sorts
@@ -643,7 +646,20 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
      */
     fun armKindleImport() {
         container.kindleImport.arm()
-        _message.value = "已就绪：切到 Kindle，打开这本书的「注解」页"
+        // Tell the service directly. It cannot infer this from an event: arming while the
+        // notebook is already on screen produces no window change at all.
+        getApplication<Application>().sendBroadcast(
+            android.content.Intent(ACTION_ARM_KINDLE_IMPORT)
+                .setPackage(getApplication<Application>().packageName)
+        )
+        _message.value = "已就绪：切到 Kindle 打开「注解」页；已经在那一页的话，划一下或点一下它"
+    }
+
+    /** How many highlights are waiting to be reviewed, for the settings entry point. */
+    fun refreshPendingImport() {
+        val store = container.kindleImport
+        val count = if (store.finished) store.items().size else 0
+        _state.update { it.copy(pendingImportCount = count) }
     }
 
     /** Called when the collector's notification brings the user back. */

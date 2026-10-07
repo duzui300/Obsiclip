@@ -81,6 +81,10 @@ fun SettingsScreen(
     onDeriveSkeletonPath: (String) -> String,
     onOpenHistory: () -> Unit,
     onRetryOutbox: () -> Unit,
+    kindleServiceReady: Boolean,
+    onArmKindleImport: () -> Unit,
+    onOpenAccessibilitySettings: () -> Unit,
+    onOpenPendingImport: () -> Unit,
 ) {
     val settings = state.settings
 
@@ -92,7 +96,9 @@ fun SettingsScreen(
     var defaultTargetMenu by remember { mutableStateOf(false) }
 
     // Which sections are shut. Kept as a list of titles so it survives a rotation.
-    var collapsed by rememberSaveable { mutableStateOf(arrayListOf<String>()) }
+    // Everything starts folded. The screen grew past the point where an open list
+    // of nine sections reads as anything.
+    var collapsed by rememberSaveable { mutableStateOf(ArrayList(SECTION_TITLES)) }
     fun toggle(title: String) {
         collapsed = if (title in collapsed) {
             ArrayList(collapsed.filterNot { it == title })
@@ -161,6 +167,51 @@ fun SettingsScreen(
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+            Section("实验功能", collapsed, ::toggle) {
+                Text(
+                    "从 Kindle 的「注解」页整批读取划线。Kindle 在阅读界面禁止选择长段落 —— " +
+                        "分享和复制都因此失败 —— 但注解页把每条划线当普通文字放在无障碍树里，" +
+                        "读它等于绕开那个限制。",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                // A finished run has to be reachable without the notification: missing it
+                // meant the highlights sat in storage with nothing pointing at them.
+                if (state.pendingImportCount > 0) {
+                    Text(
+                        "上次抓到的还在等着检查。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Button(onClick = onOpenPendingImport) {
+                        Text("检查上次抓到的 ${state.pendingImportCount} 条")
+                    }
+                }
+                if (kindleServiceReady) {
+                    Text(
+                        "已就绪。在 Kindle 里打开这本书的注解页，点下面的按钮，它会自己读完。",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    Button(onClick = onArmKindleImport) { Text("开始抓取") }
+                } else {
+                    Text(
+                        "需要先开启无障碍权限，App 自己开不了。路径：系统设置 → 无障碍 → " +
+                            "「已下载的服务」（部分机型叫「已安装的服务」）→ 找到" +
+                            "「从 Kindle 的注解页收集划线」→ 打开，并在弹窗里点「允许」。\n" +
+                            "注意不是页面顶部的「无障碍快捷方式」，那个是给快捷键用的。",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    OutlinedButton(onClick = onOpenAccessibilitySettings) {
+                        Text("去开启无障碍权限")
+                    }
+                }
+                Toggle("抓取后直接写入，不过一遍", settings.autoWriteImports, onAutoWriteImports)
+                Text(
+                    "默认关。Kindle 会把长划线折叠，折叠后的样子和短划线一模一样 —— " +
+                        "开了就直接写，被折叠过的和被写过的仍然会留着让你确认。",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+
             Section("写入目标", collapsed, ::toggle) {
                 Field("Vault 名称", settings.vault, onVault)
                 Field("默认小节标题", settings.heading, onHeading, "添加目的地时的默认值")
@@ -337,12 +388,6 @@ fun SettingsScreen(
                         "勾上就立刻回到你分享的地方。",
                     style = MaterialTheme.typography.bodySmall,
                 )
-                Toggle("抓取后直接写入，不过一遍", settings.autoWriteImports, onAutoWriteImports)
-                Text(
-                    "默认关。Kindle 会把长划线折叠，折叠后的样子和短划线一模一样 —— " +
-                        "开了就直接写，被折叠过的和被写过的仍然会留着让你确认。",
-                    style = MaterialTheme.typography.bodySmall,
-                )
                 Toggle("打开 App 时自动读取剪贴板", settings.autoReadClipboard, onAutoReadClipboard)
                 Text(
                     "从桌面或磁贴打开时覆盖当前内容；由分享进入时不受影响。",
@@ -419,6 +464,20 @@ fun SettingsScreen(
         }
     }
 }
+
+/** Every section, so all of them can start folded. */
+private val SECTION_TITLES = listOf(
+    "实验功能",
+    "写入目标",
+    "目的地",
+    "书籍",
+    "输出格式",
+    "写入方式",
+    "清洗流水线",
+    "自定义规则",
+    "按 App 指定规则",
+    "记录",
+)
 
 /** A section whose body hides behind its title, so a long screen stays scannable. */
 @Composable
