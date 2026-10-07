@@ -21,7 +21,7 @@ class PendingReturn(context: Context) {
     fun take(): String? {
         val value = prefs.getString(KEY, null)
         if (value != null) prefs.edit().remove(KEY).apply()
-        return value
+        return value?.takeIf { it.isNotEmpty() }
     }
 
     private companion object {

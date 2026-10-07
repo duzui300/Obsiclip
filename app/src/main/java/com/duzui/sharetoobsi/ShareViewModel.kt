@@ -740,9 +740,8 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
             Template.render(current.effectiveTemplate, current.valuesFor(entry))
         }
 
-        if (current.settings.returnToSource) {
-            current.sourcePackage?.let { container.pendingReturn.remember(it) }
-        }
+        container.pendingReturn.remember(current.sourcePackage ?: "")
+        val hasSource = current.settings.returnToSource && current.sourcePackage != null
 
         val outcome = container.sender.send(
             WriteRequest(
@@ -751,7 +750,7 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
                 heading = current.effectiveHeading,
                 content = block,
                 mode = current.settings.mode,
-                successCallback = if (current.settings.returnToSource) RETURN_CALLBACK else null,
+                successCallback = if (hasSource) RETURN_CALLBACK else null,
             )
         )
 
@@ -777,9 +776,10 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
         // Obsidian always comes to the foreground — a URI can only be handled by starting
         // the app — and it lands on the note it wrote. Leaving for the app that shared is
         // the only way out of that, so the callback exists for exactly that.
-        if (current.settings.returnToSource) {
-            current.sourcePackage?.let { container.pendingReturn.remember(it) }
-        }
+        // Cleared first: a stale app from an earlier share would otherwise be launched by
+        // a write that never had a source app at all.
+        container.pendingReturn.remember(current.sourcePackage ?: "")
+        val hasSource = current.settings.returnToSource && current.sourcePackage != null
 
         val outcome = container.sender.send(
             WriteRequest(
@@ -789,7 +789,7 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
                 content = current.payload,
                 mode = current.settings.mode,
                 silent = false,
-                successCallback = if (current.settings.returnToSource) RETURN_CALLBACK else null,
+                successCallback = if (hasSource) RETURN_CALLBACK else null,
             )
         )
 

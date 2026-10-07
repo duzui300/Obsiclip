@@ -48,6 +48,7 @@ import com.duzui.sharetoobsi.data.TargetEntity
 import com.duzui.sharetoobsi.domain.CleanupOptions
 import com.duzui.sharetoobsi.domain.Template
 import com.duzui.sharetoobsi.domain.WriteMode
+import com.duzui.sharetoobsi.send.CollectorStatus
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -81,7 +82,7 @@ fun SettingsScreen(
     onDeriveSkeletonPath: (String) -> String,
     onOpenHistory: () -> Unit,
     onRetryOutbox: () -> Unit,
-    kindleServiceReady: Boolean,
+    collectorStatus: CollectorStatus,
     onArmKindleImport: () -> Unit,
     onOpenAccessibilitySettings: () -> Unit,
     onOpenPendingImport: () -> Unit,
@@ -418,9 +419,14 @@ fun SettingsScreen(
             }
             Section("实验功能", collapsed, ::toggle) {
                 Text(
-                    "从 Kindle 的「注解」页整批读取划线。Kindle 在阅读界面禁止选择长段落 —— " +
-                        "分享和复制都因此失败 —— 但注解页把每条划线当普通文字放在无障碍树里，" +
-                        "读它等于绕开那个限制。",
+                    "为了绕开 Kindle 的分享与复制限制：它在阅读界面禁止选择长段落，所以整段分享和" +
+                        "复制都会失败；而「注解」页把每条划线当普通文字放进无障碍树，直接读它就行 —— " +
+                        "不需要选择，也不需要剪贴板。",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Text(
+                    "实验功能：判据是按屏幕结构写的，Kindle 改版后可能失效，所以抓到的结果一律先" +
+                        "给你过一遍再写。",
                     style = MaterialTheme.typography.bodySmall,
                 )
                 // A finished run has to be reachable without the notification: missing it
@@ -435,22 +441,40 @@ fun SettingsScreen(
                         Text("检查上次抓到的 ${state.pendingImportCount} 条")
                     }
                 }
-                if (kindleServiceReady) {
-                    Text(
-                        "已就绪。在 Kindle 里打开这本书的注解页，点下面的按钮，它会自己读完。",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                    Button(onClick = onArmKindleImport) { Text("开始抓取") }
-                } else {
-                    Text(
-                        "需要先开启无障碍权限，App 自己开不了。路径：系统设置 → 无障碍 → " +
-                            "「已下载的服务」（部分机型叫「已安装的服务」）→ 找到" +
-                            "「从 Kindle 的注解页收集划线」→ 打开，并在弹窗里点「允许」。\n" +
-                            "注意不是页面顶部的「无障碍快捷方式」，那个是给快捷键用的。",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                    OutlinedButton(onClick = onOpenAccessibilitySettings) {
-                        Text("去开启无障碍权限")
+                when (collectorStatus) {
+                    CollectorStatus.Running -> {
+                        Text(
+                            "已就绪。在 Kindle 里打开这本书的注解页，点下面的按钮，它会自己读完。",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        Button(onClick = onArmKindleImport) { Text("开始抓取") }
+                    }
+
+                    // Cost the most time of anything here: the switch looks on while
+                    // nothing is listening, so the only fix is to toggle it off and back on.
+                    CollectorStatus.EnabledNotRunning -> {
+                        Text(
+                            "系统里显示已开启，但服务其实没在运行（在小米系统上见过）。" +
+                                "把那个开关关掉再打开一次就好。",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                        OutlinedButton(onClick = onOpenAccessibilitySettings) {
+                            Text("去无障碍设置里重开一次")
+                        }
+                    }
+
+                    CollectorStatus.NotEnabled -> {
+                        Text(
+                            "服务还没开。路径：系统设置 → 无障碍 → 「已下载的服务」" +
+                                "（部分机型叫「已安装的服务」）→ 找到「从 Kindle 的注解页收集划线」" +
+                                "→ 打开，并在弹窗里点「允许」。" +
+                                "注意不是页面顶部的「无障碍快捷方式」，那个是给快捷键用的。",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        OutlinedButton(onClick = onOpenAccessibilitySettings) {
+                            Text("去开启无障碍权限")
+                        }
                     }
                 }
                 Toggle("抓取后直接写入，不过一遍", settings.autoWriteImports, onAutoWriteImports)

@@ -21,7 +21,8 @@ import com.duzui.sharetoobsi.ui.ImportReviewScreen
 import com.duzui.sharetoobsi.ui.SettingsScreen
 import com.duzui.sharetoobsi.ui.ShareScreen
 import com.duzui.sharetoobsi.send.accessibilitySettingsIntent
-import com.duzui.sharetoobsi.send.isKindleServiceEnabled
+import com.duzui.sharetoobsi.send.CollectorStatus
+import com.duzui.sharetoobsi.send.collectorStatus
 import com.duzui.sharetoobsi.ui.theme.ShareTransTheme
 
 class MainActivity : ComponentActivity() {
@@ -41,8 +42,8 @@ class MainActivity : ComponentActivity() {
     /** Bumped when the collector's notification opens this screen with a result waiting. */
     private var importRequests by mutableStateOf(0)
 
-    /** Watches the system setting, since only the user can turn the collector on. */
-    private var kindleServiceReady by mutableStateOf(false)
+    /** Whether the collector is really listening — not whether a setting claims it is. */
+    private var collector by mutableStateOf(CollectorStatus.NotEnabled)
 
     /** Needed on API 33+ for the "collection finished" notification to appear at all. */
     private val notificationPermission =
@@ -66,7 +67,7 @@ class MainActivity : ComponentActivity() {
         if (isFromTile(intent)) tileAdoptRequests = 1
         requestedTargetId = targetFrom(intent)
         if (isFromImport(intent)) importRequests = 1
-        kindleServiceReady = isKindleServiceEnabled(this)
+        collector = collectorStatus(this)
 
         setContent {
             ShareTransTheme {
@@ -151,7 +152,7 @@ class MainActivity : ComponentActivity() {
                         onSaveFormat = viewModel::saveFormat,
                         onDeleteFormat = viewModel::deleteFormat,
                         onDeriveSkeletonPath = viewModel::previewBookPath,
-                        kindleServiceReady = kindleServiceReady,
+                        collectorStatus = collector,
                         onArmKindleImport = {
                             askForNotificationPermission()
                             viewModel.armKindleImport()
@@ -191,7 +192,7 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         // The user may have just come back from enabling it in system settings.
-        kindleServiceReady = isKindleServiceEnabled(this)
+        collector = collectorStatus(this)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -205,16 +206,17 @@ class MainActivity : ComponentActivity() {
             tileAdoptRequests++
             return
         }
+        // Before the launcher check: this intent is also an ACTION_MAIN with no text, so
+        // the launcher branch would swallow it and the collected batch would never open.
+        if (isFromImport(intent)) {
+            importRequests++
+            return
+        }
         // Brought to the front from the launcher while still alive. This is the common
         // second capture of a session, and it has to behave like a fresh launch — the
         // text on screen is from last time and is stale by definition.
         if (isLauncherEntry(intent)) {
             launcherAdoptRequests++
-            return
-        }
-        if (isFromImport(intent)) {
-            importRequests++
-            screen = Screen.Share
             return
         }
         requestedTargetId = targetFrom(intent)
@@ -255,12 +257,11 @@ class MainActivity : ComponentActivity() {
      */
     private fun returnToSourceApp() {
         val sourcePackage = container.pendingReturn.take() ?: return
-        // Null when the app is not launchable from a drawer, or is no longer visible to
-        // us; in that case simply closing leaves the user in Obsidian, which is where
-        // they already are.
-        packageManager.getLaunchIntentForPackage(sourcePackage)?.let { launch ->
-            startActivity(launch)
-        }
+        // Only close if something actually opened. Finishing with nothing to go back to
+        // drops the user on the launcher, which is what a write with no source app — from
+        // the clipboard, the tile, or a collected batch — used to do.
+        val launch = packageManager.getLaunchIntentForPackage(sourcePackage) ?: return
+        startActivity(launch)
         finish()
     }
 
