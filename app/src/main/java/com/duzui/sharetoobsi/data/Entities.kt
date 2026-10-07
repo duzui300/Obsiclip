@@ -4,27 +4,24 @@ import androidx.room.Entity
 import androidx.room.PrimaryKey
 
 /**
- * A book being read. Named by title because that is also how the vault names the note,
- * so the title doubles as the key and as `{title}` in the path template.
+ * A saved destination for a write.
+ *
+ * A book is just a target whose path came from the path template, which is why the author
+ * and year live here rather than in a separate table: they exist to fill the `{author}`
+ * and `{year}` placeholders of that book's quotes, and nothing else.
  */
-@Entity(tableName = "books")
-data class BookEntity(
-    @PrimaryKey val title: String,
+@Entity(tableName = "targets")
+data class TargetEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    /** Doubles as `{title}` in the path template and in the attribution line. */
+    val name: String,
+    val path: String,
+    /** Blank means "append to the end of the file", the only safe option without a heading. */
+    val heading: String = "",
     val author: String = "",
     val year: String = "",
     /** Set once a Book skeleton has been written, so it is never written twice. */
     val seeded: Boolean = false,
-    val lastUsedAt: Long = 0,
-)
-
-/** A saved destination, e.g. the inbox note or a long-running index note. */
-@Entity(tableName = "targets")
-data class TargetEntity(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val name: String,
-    val path: String,
-    /** Blank means "append to the end of the file", which is the only safe option without a heading. */
-    val heading: String = "",
     val sortOrder: Int = 0,
 )
 
@@ -34,7 +31,7 @@ data class HistoryEntity(
     val createdAt: Long = 0,
     val targetPath: String = "",
     val payload: String = "",
-    /** [Outcome] name. "Dispatched" only means the intent left the app — see [Outcome]. */
+    /** "Dispatched" only means the intent left the app — see SendOutcome. */
     val outcome: String = "",
     val viaClipboard: Boolean = false,
     val detail: String = "",

@@ -34,6 +34,17 @@ object Template {
 
     private val TRAILING_WHITESPACE = Regex("[ \\t]+$")
 
+    /**
+     * `> — #reading` — an attribution dash with nothing left to introduce. Only matches a
+     * line that is nothing but the dash and tags, so a quote line beginning `- #tag` is safe.
+     * MULTILINE matters: without it `^`/`$` anchor to the whole text and only a one-line
+     * payload would ever match.
+     */
+    private val DANGLING_ATTRIBUTION = Regex(
+        """^([> \t]*)[—–\-]+[ \t]+(#[^\s#]+(?:[ \t]+#[^\s#]+)*)[ \t]*$""",
+        RegexOption.MULTILINE,
+    )
+
     /** Left behind when a value between two literals vanishes. Markdown collapses these anyway. */
     private val RUN_OF_SPACES = Regex("[ \\t]{2,}")
 
@@ -54,7 +65,10 @@ object Template {
 
     fun render(template: String, values: TemplateValues): String {
         val substituted = substitute(template, values)
-        return BLANK_RUN.replace(pruneDecorationLines(substituted), "\n\n").trim()
+        val tidied = DANGLING_ATTRIBUTION.replace(pruneDecorationLines(substituted)) { match ->
+            match.groupValues[1] + match.groupValues[2]
+        }
+        return BLANK_RUN.replace(tidied, "\n\n").trim()
     }
 
     /** Drops lines that are only markdown/punctuation noise once the values are gone. */

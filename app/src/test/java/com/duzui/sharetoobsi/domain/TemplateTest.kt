@@ -17,12 +17,32 @@ class TemplateTest {
     }
 
     @Test
+    fun `drops a lone attribution dash when only tags are left`() {
+        // The inbox case: no book named, so the dash would introduce nothing.
+        // `{text}` already carries its own `>` prefixes from the cleanup stage.
+        val rendered = Template.render(
+            "{text}\n\n> — {author}《{title}》{year} {tags}",
+            TemplateValues(text = "> 順手記一句", tags = "#reading"),
+        )
+        assertEquals("> 順手記一句\n\n> #reading", rendered)
+    }
+
+    @Test
+    fun `keeps the dash when a name follows it`() {
+        val rendered = Template.render(
+            "{text}\n\n> — {author}《{title}》{year} {tags}",
+            TemplateValues(text = "> x", author = "平野啓一郎", title = "本心", tags = "#reading"),
+        )
+        assertEquals("> x\n\n> — 平野啓一郎《本心》 #reading", rendered)
+    }
+
+    @Test
     fun `drops the title brackets along with an empty title`() {
         val rendered = Template.render(
-            "> — {author}《{title}》{year} {tags}",
-            TemplateValues(text = "x", tags = "#reading"),
+            "> — {author}《{title}》{year}",
+            TemplateValues(text = "x", author = "平野啓一郎"),
         )
-        assertEquals("> — #reading", rendered)
+        assertEquals("> — 平野啓一郎", rendered)
     }
 
     @Test

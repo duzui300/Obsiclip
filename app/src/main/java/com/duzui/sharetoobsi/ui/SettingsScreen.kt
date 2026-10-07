@@ -53,10 +53,25 @@ fun SettingsScreen(
     onSilent: (Boolean) -> Unit,
     onReturnToSource: (Boolean) -> Unit,
     onCleanup: (CleanupOptions) -> Unit,
-    onSaveTarget: (String, String, String) -> Unit,
+    onSaveTarget: (String, String, String, String, String, Boolean) -> Unit,
+    onDerivePath: (String) -> String,
     onDeleteTarget: (TargetEntity) -> Unit,
     onRetryOutbox: () -> Unit,
 ) {
+    var addingTarget by remember { mutableStateOf(false) }
+
+    if (addingTarget) {
+        AddTargetDialog(
+            defaultHeading = settings.heading,
+            derivePath = onDerivePath,
+            onDismiss = { addingTarget = false },
+            onSave = { name, author, year, path, heading, skeleton ->
+                onSaveTarget(name, author, year, path, heading, skeleton)
+                addingTarget = false
+            },
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -127,13 +142,27 @@ fun SettingsScreen(
             Toggle("包成 ==高亮==（在引用块内）", cleanup.wrapHighlight) { onCleanup(cleanup.copy(wrapHighlight = it)) }
 
             Section("预设目标")
-            TargetForm(onSaveTarget)
+            Text(
+                "把正在读的几本书加进来，分享时点一下芯片就能选，不用每次打字。",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Button(onClick = { addingTarget = true }) { Text("添加目标") }
             targets.forEach { target ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(target.name, style = MaterialTheme.typography.bodyMedium)
                         Text(
-                            target.path + if (target.heading.isBlank()) "（文件末尾）" else " › ${target.heading}",
+                            buildString {
+                                append(target.path)
+                                if (target.heading.isBlank()) {
+                                    append("（文件末尾）")
+                                } else {
+                                    append(" › ").append(target.heading)
+                                }
+                                val by = listOf(target.author, target.year).filter { it.isNotBlank() }
+                                if (by.isNotEmpty()) append("　— ").append(by.joinToString(" "))
+                                if (!target.seeded) append("　· 未建骨架")
+                            },
                             style = MaterialTheme.typography.bodySmall,
                         )
                     }
@@ -186,26 +215,5 @@ private fun Toggle(label: String, checked: Boolean, onChange: (Boolean) -> Unit)
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(label, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
         Switch(checked = checked, onCheckedChange = onChange)
-    }
-}
-
-@Composable
-private fun TargetForm(onSave: (String, String, String) -> Unit) {
-    var name by remember { mutableStateOf("") }
-    var path by remember { mutableStateOf("") }
-    var heading by remember { mutableStateOf("") }
-
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Field("名称", name, { name = it })
-        Field("vault 相对路径", path, { path = it })
-        Field("小节标题（可留空）", heading, { heading = it })
-        Button(
-            onClick = {
-                onSave(name, path, heading)
-                name = ""
-                path = ""
-                heading = ""
-            },
-        ) { Text("添加目标") }
     }
 }

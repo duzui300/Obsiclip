@@ -41,6 +41,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.duzui.sharetoobsi.ShareUiState
+import com.duzui.sharetoobsi.data.TargetEntity
 import com.duzui.sharetoobsi.domain.SourceProfile
 import com.duzui.sharetoobsi.domain.SourceProfiles
 import com.duzui.sharetoobsi.domain.WriteMode
@@ -51,25 +52,38 @@ fun ShareScreen(
     state: ShareUiState,
     message: String?,
     onProfileChange: (SourceProfile) -> Unit,
-    onBookTitleChange: (String) -> Unit,
-    onBookAuthorChange: (String) -> Unit,
-    onBookYearChange: (String) -> Unit,
-    onTagsChange: (String) -> Unit,
     onModeChange: (WriteMode) -> Unit,
     onSelectTarget: (Long?) -> Unit,
+    onAddTarget: (String, String, String, String, String, Boolean) -> Unit,
+    onCreateSkeleton: (TargetEntity) -> Unit,
+    onDerivePath: (String) -> String,
+    onReadClipboard: () -> Unit,
     onPayloadEdit: (String) -> Unit,
     onRegenerate: () -> Unit,
-    onCreateSkeleton: () -> Unit,
     onSend: () -> Unit,
     onOpenSettings: () -> Unit,
     onMessageShown: () -> Unit,
 ) {
     val snackbar = remember { SnackbarHostState() }
+    var addingTarget by remember { mutableStateOf(false) }
+
     LaunchedEffect(message) {
         if (message != null) {
             snackbar.showSnackbar(message)
             onMessageShown()
         }
+    }
+
+    if (addingTarget) {
+        AddTargetDialog(
+            defaultHeading = state.settings.heading,
+            derivePath = onDerivePath,
+            onDismiss = { addingTarget = false },
+            onSave = { name, author, year, path, heading, skeleton ->
+                onAddTarget(name, author, year, path, heading, skeleton)
+                addingTarget = false
+            },
+        )
     }
 
     Scaffold(
@@ -104,16 +118,41 @@ fun ShareScreen(
                 Text("写入 Obsidian", style = MaterialTheme.typography.titleMedium)
             }
 
-            TargetSection(state, onSelectTarget)
-            PayloadField(state, onPayloadEdit, onRegenerate)
-            BookFields(
+            TargetSection(
                 state = state,
-                onTitle = onBookTitleChange,
-                onAuthor = onBookAuthorChange,
-                onYear = onBookYearChange,
-                onTags = onTagsChange,
-                onCreateSkeleton = onCreateSkeleton,
+                onSelectTarget = onSelectTarget,
+                onAddTarget = { addingTarget = true },
             )
+
+            state.chosenTarget?.takeIf { !it.seeded }?.let { target ->
+                // A heading that does not exist makes Obsidian write nothing and report
+                // nothing, so a brand new note needs its skeleton creating first.
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text(
+                            "Obsidian 找不到「${state.effectiveHeading ?: state.settings.heading}」" +
+                                "时会静默不写。这是本新书的话，先建骨架。",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        OutlinedButton(
+                            onClick = { onCreateSkeleton(target) },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text("新建「${target.name}」的笔记骨架（已有笔记请勿点）")
+                        }
+                    }
+                }
+            }
+
+            if (state.raw.isBlank()) {
+                EmptyState(state.origin, onReadClipboard)
+            } else {
+                PayloadField(state, onPayloadEdit, onRegenerate, onReadClipboard)
+            }
+
             SourcePicker(state, onProfileChange)
             ModePicker(state, onModeChange)
         }
@@ -121,112 +160,72 @@ fun ShareScreen(
 }
 
 @Composable
-private fun TargetSection(state: ShareUiState, onSelectTarget: (Long?) -> Unit) {
+private fun EmptyState(origin: String, onReadClipboard: () -> Unit) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Row(
-                    modifier = Modifier.horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    FilterChip(
-                        selected = state.selectedTargetId == null,
-                        onClick = { onSelectTarget(null) },
-                        label = {
-                            Text(
-                                if (state.targetsBook) "当前书目" else "收件箱",
-                            )
-                        },
-                    )
-                    state.savedTargets.forEach { target ->
-                        FilterChip(
-                            selected = state.selectedTargetId == target.id,
-                            onClick = { onSelectTarget(target.id) },
-                            label = { Text(target.name) },
-                        )
-                    }
-                }
-            }
-
             Text(
-                state.targetPath,
+                if (origin.isBlank()) "还没有内容" else "$origin —— 但内容为空",
                 style = MaterialTheme.typography.bodyMedium,
             )
             Text(
-                when {
-                    state.settings.mode == WriteMode.OFFICIAL ->
-                        "追加到文件末尾 —— 官方 URI 无法指定小节"
-                    state.effectiveHeading != null -> "追加到小节：${state.effectiveHeading}"
-                    else -> "追加到文件末尾"
-                },
+                "从别的 App 分享过来，或者在那里选中文字后「复制」，再读进来。\n" +
+                    "分享面板有长度限制的 App（比如 Kindle），走复制这条路更稳，也更干净。",
                 style = MaterialTheme.typography.bodySmall,
             )
+            OutlinedButton(onClick = onReadClipboard, modifier = Modifier.fillMaxWidth()) {
+                Text("从剪贴板读取")
+            }
         }
     }
 }
 
 @Composable
-private fun BookFields(
+private fun TargetSection(
     state: ShareUiState,
-    onTitle: (String) -> Unit,
-    onAuthor: (String) -> Unit,
-    onYear: (String) -> Unit,
-    onTags: (String) -> Unit,
-    onCreateSkeleton: () -> Unit,
+    onSelectTarget: (Long?) -> Unit,
+    onAddTarget: () -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        if (state.hintApplied) {
-            Text(
-                "书名和作者是从分享内容里认出来的，可以直接改",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.primary,
-            )
-        }
-        OutlinedTextField(
-            value = state.bookTitle,
-            onValueChange = onTitle,
-            label = { Text("书名") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedTextField(
-                value = state.bookAuthor,
-                onValueChange = onAuthor,
-                label = { Text("作者") },
-                singleLine = true,
-                modifier = Modifier.weight(1f),
-            )
-            OutlinedTextField(
-                value = state.bookYear,
-                onValueChange = onYear,
-                label = { Text("年份") },
-                singleLine = true,
-                modifier = Modifier.weight(1f),
-            )
-        }
-        OutlinedTextField(
-            value = state.settings.tags,
-            onValueChange = onTags,
-            label = { Text("标签") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
-        )
-
-        if (state.targetsBook && !state.bookSeeded) {
-            // A heading that does not exist makes Obsidian write nothing and report
-            // nothing, so a brand new book needs its skeleton created first.
-            Text(
-                "Obsidian 找不到「${state.effectiveHeading ?: "目标小节"}」时会静默不写。" +
-                    "这是本新书的话，先把骨架建起来。",
-                style = MaterialTheme.typography.bodySmall,
-            )
-            OutlinedButton(onClick = onCreateSkeleton, modifier = Modifier.fillMaxWidth()) {
-                Text("新建书目骨架（已有笔记请勿点）")
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                FilterChip(
+                    selected = state.selectedTargetId == null,
+                    onClick = { onSelectTarget(null) },
+                    label = { Text("收件箱") },
+                )
+                state.savedTargets.forEach { target ->
+                    FilterChip(
+                        selected = state.selectedTargetId == target.id,
+                        onClick = { onSelectTarget(target.id) },
+                        label = { Text(target.name) },
+                    )
+                }
+                FilterChip(
+                    selected = false,
+                    onClick = onAddTarget,
+                    label = { Text("＋ 书目") },
+                )
             }
+
+            Text(state.targetPath, style = MaterialTheme.typography.bodyMedium)
+            Text(
+                when {
+                    state.settings.mode == WriteMode.OFFICIAL ->
+                        "追加到文件末尾 —— 官方 URI 无法指定小节"
+                    state.effectiveHeading != null -> "追加到小节：${state.effectiveHeading}"
+                    else -> "追加到文件末尾（没选书目的内容先进收件箱）"
+                },
+                style = MaterialTheme.typography.bodySmall,
+            )
         }
     }
 }
@@ -236,6 +235,7 @@ private fun PayloadField(
     state: ShareUiState,
     onEdit: (String) -> Unit,
     onRegenerate: () -> Unit,
+    onReadClipboard: () -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -244,6 +244,7 @@ private fun PayloadField(
                 style = MaterialTheme.typography.labelMedium,
                 modifier = Modifier.weight(1f),
             )
+            TextButton(onClick = onReadClipboard) { Text("重读剪贴板") }
             if (state.payloadOverride != null) {
                 TextButton(onClick = onRegenerate) { Text("重新生成") }
             }
@@ -258,7 +259,10 @@ private fun PayloadField(
                 .heightIn(min = 180.dp, max = 320.dp),
             textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
         )
-        Text("原文 ${state.raw.length} 字", style = MaterialTheme.typography.bodySmall)
+        Text(
+            "${state.origin} · 原文 ${state.raw.length} 字",
+            style = MaterialTheme.typography.bodySmall,
+        )
     }
 }
 
@@ -266,24 +270,18 @@ private fun PayloadField(
 private fun SourcePicker(state: ShareUiState, onProfileChange: (SourceProfile) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
 
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            "来源：${state.sourcePackage ?: "未知"}",
-            style = MaterialTheme.typography.bodySmall,
-        )
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("清洗规则", modifier = Modifier.weight(1f))
-            OutlinedButton(onClick = { expanded = true }) { Text(state.profile.label) }
-            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                SourceProfiles.ALL.forEach { profile ->
-                    DropdownMenuItem(
-                        text = { Text(profile.label) },
-                        onClick = {
-                            onProfileChange(profile)
-                            expanded = false
-                        },
-                    )
-                }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text("清洗规则", modifier = Modifier.weight(1f))
+        OutlinedButton(onClick = { expanded = true }) { Text(state.profile.label) }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            SourceProfiles.ALL.forEach { profile ->
+                DropdownMenuItem(
+                    text = { Text(profile.label) },
+                    onClick = {
+                        onProfileChange(profile)
+                        expanded = false
+                    },
+                )
             }
         }
     }

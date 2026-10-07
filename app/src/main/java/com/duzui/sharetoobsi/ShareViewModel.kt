@@ -4,7 +4,6 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.duzui.sharetoobsi.data.AppSettings
-import com.duzui.sharetoobsi.data.BookEntity
 import com.duzui.sharetoobsi.data.HistoryEntity
 import com.duzui.sharetoobsi.data.OutboxEntity
 import com.duzui.sharetoobsi.data.TargetEntity
@@ -13,7 +12,6 @@ import com.duzui.sharetoobsi.domain.CleanupOptions
 import com.duzui.sharetoobsi.domain.Defaults
 import com.duzui.sharetoobsi.domain.SourceProfile
 import com.duzui.sharetoobsi.domain.SourceProfiles
-import com.duzui.sharetoobsi.domain.ShareParser
 import com.duzui.sharetoobsi.domain.Template
 import com.duzui.sharetoobsi.domain.TemplateValues
 import com.duzui.sharetoobsi.domain.WriteMode
@@ -36,27 +34,24 @@ const val RETURN_CALLBACK = "sharetoobsi://return"
  */
 data class ShareUiState(
     val raw: String = "",
+    /** Where the text came from, for display: a share, the clipboard, or nothing yet. */
+    val origin: String = "",
     val sourcePackage: String? = null,
     val profile: SourceProfile = SourceProfiles.GENERIC,
     val settings: AppSettings = AppSettings(),
-    val bookTitle: String = "",
-    val bookAuthor: String = "",
-    val bookYear: String = "",
-    /** True when the book name above was read out of the shared text rather than typed. */
-    val hintApplied: Boolean = false,
-    /** False until a Book skeleton is known to have been written for this title. */
-    val bookSeeded: Boolean = false,
-    /** null means "follow the current book, falling back to the inbox". */
-    val selectedTargetId: Long? = null,
     val savedTargets: List<TargetEntity> = emptyList(),
+    /** null is the inbox: whatever is being captured without naming a book first. */
+    val selectedTargetId: Long? = null,
     /** Set once the user hand-edits the payload; cleared whenever an input changes. */
     val payloadOverride: String? = null,
 ) {
+    val chosenTarget: TargetEntity? = savedTargets.firstOrNull { it.id == selectedTargetId }
+
     private val values: TemplateValues = TemplateValues(
         text = Cleanup.clean(raw, profile, settings.cleanup),
-        title = bookTitle.ifBlank { null },
-        author = bookAuthor.ifBlank { null },
-        year = bookYear.ifBlank { null },
+        title = chosenTarget?.name,
+        author = chosenTarget?.author?.takeIf { it.isNotBlank() },
+        year = chosenTarget?.year?.takeIf { it.isNotBlank() },
         tags = settings.tags.ifBlank { null },
         source = sourcePackage,
         date = LocalDate.now().toString(),
@@ -64,33 +59,18 @@ data class ShareUiState(
 
     val payload: String = payloadOverride ?: Template.render(settings.template, values)
 
-    val chosenTarget: TargetEntity? = savedTargets.firstOrNull { it.id == selectedTargetId }
-
-    val targetsBook: Boolean = chosenTarget == null && bookTitle.isNotBlank()
-
-    val bookPath: String = Template.substitute(settings.pathTemplate, values).trim()
-
-    val targetPath: String = when {
-        chosenTarget != null -> chosenTarget.path
-        targetsBook -> bookPath
-        else -> settings.inboxPath
-    }
+    val targetPath: String = chosenTarget?.path ?: settings.inboxPath
 
     /**
-     * A heading that does not exist makes the Advanced URI silently write nothing, so a
-     * target with no heading is written without one rather than aimed at a guess.
+     * A heading that does not exist makes the Advanced URI silently write nothing, so the
+     * inbox target is written without one rather than aimed at a guess.
      */
-    val effectiveHeading: String? = when {
-        chosenTarget != null -> chosenTarget.heading.ifBlank { null }
-        targetsBook -> settings.heading.ifBlank { null }
-        else -> null
-    }
+    val effectiveHeading: String? = chosenTarget?.heading?.takeIf { it.isNotBlank() }
 }
 
 class ShareViewModel(application: Application) : AndroidViewModel(application) {
 
     private val container = AppContainer(application)
-    private val books = container.db.books()
     private val targets = container.db.targets()
     private val history = container.db.history()
     private val outbox = container.db.outbox()
@@ -109,41 +89,28 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
         viewModelScope.launch {
-            targets.observeAll().collect { list -> _state.update { it.copy(savedTargets = list) } }
-        }
-        viewModelScope.launch {
-            // Pick up where the last session left off, once, and only if nothing is set yet.
-            val recent = books.observeMostRecent().first()
-            if (recent != null) {
-                _state.update {
-                    if (it.bookTitle.isBlank()) {
-                        it.copy(
-                            bookTitle = recent.title,
-                            bookAuthor = recent.author,
-                            bookYear = recent.year,
-                            bookSeeded = recent.seeded,
-                        )
-                    } else {
-                        it
-                    }
+            targets.observeAll().collect { list ->
+                _state.update { current ->
+                    // A target selected last session, or since deleted, must not stay selected.
+                    val stillThere = list.any { it.id == current.selectedTargetId }
+                    current.copy(
+                        savedTargets = list,
+                        selectedTargetId = if (stillThere) current.selectedTargetId else null,
+                    )
                 }
             }
         }
     }
 
-    // ---- incoming share ----------------------------------------------------
+    // ---- intake ------------------------------------------------------------
 
     fun onShare(share: IncomingShare?) {
         if (share == null || share.text.isBlank()) return
         val detected = SourceProfiles.forPackage(share.sourcePackage)
-
-        // Kindle and friends name the book in a preamble. Using it is what makes sharing
-        // from a *different* book just work — that is precisely when the target changes.
-        val hint = ShareParser.extract(share.text)
-
         _state.update { current ->
             current.copy(
                 raw = share.text,
+                origin = "分享自 ${share.sourcePackage ?: "未知来源"}",
                 sourcePackage = share.sourcePackage,
                 // Nothing recognised the source, so fall back to the configured default.
                 profile = if (detected === SourceProfiles.GENERIC) {
@@ -151,26 +118,34 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
                 } else {
                     detected
                 },
-                // A recognised title replaces the author too, so a stale author from the
-                // previous book cannot leak into the new one's attribution line.
-                bookTitle = hint.title ?: current.bookTitle,
-                bookAuthor = if (hint.title != null) hint.author.orEmpty() else current.bookAuthor,
-                hintApplied = hint.title != null,
                 payloadOverride = null,
             )
         }
+    }
 
-        if (hint.title != null) rememberBook(_state.value)
+    /**
+     * The escape hatch for shares that are too long to go through a share sheet: select in
+     * the reading app, Copy, and read it here.
+     */
+    fun readFromClipboard(text: String?) {
+        if (text.isNullOrBlank()) {
+            _message.value = "剪贴板里没有文字"
+            return
+        }
+        _state.update {
+            it.copy(
+                raw = text,
+                origin = "剪贴板",
+                sourcePackage = null,
+                profile = SourceProfiles.byId(it.settings.defaultProfileId),
+                payloadOverride = null,
+            )
+        }
     }
 
     // ---- inputs ------------------------------------------------------------
 
     fun setProfile(profile: SourceProfile) = edit { it.copy(profile = profile) }
-
-    fun setBookTitle(value: String) = editBook { it.copy(bookTitle = value) }
-    fun setBookAuthor(value: String) = editBook { it.copy(bookAuthor = value) }
-    fun setBookYear(value: String) = editBook { it.copy(bookYear = value) }
-
     fun selectTarget(id: Long?) = edit { it.copy(selectedTargetId = id) }
 
     fun editPayload(value: String) = _state.update { it.copy(payloadOverride = value) }
@@ -187,10 +162,61 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
     fun setReturnToSource(value: Boolean) = settings { it.copy(returnToSource = value) }
     fun setCleanup(options: CleanupOptions) = settings { it.copy(cleanup = options) }
 
-    fun saveTarget(name: String, path: String, heading: String) {
-        if (name.isBlank() || path.isBlank()) return
+    /** The path a new target would get, so the add form can show it while the name is typed. */
+    fun previewPath(name: String): String =
+        Template.substitute(
+            _state.value.settings.pathTemplate,
+            TemplateValues(text = "", title = name.trim(), date = LocalDate.now().toString()),
+        ).trim()
+
+    /**
+     * Remembers a book (or any other destination) so the next share can be filed without
+     * typing. Optionally writes its skeleton, which is the only way a brand new note gets
+     * the `## Quotes worth keeping` section the next write needs to aim at.
+     */
+    fun addTarget(
+        name: String,
+        author: String,
+        year: String,
+        path: String,
+        heading: String,
+        createSkeleton: Boolean,
+    ) {
+        val cleanName = name.trim()
+        if (cleanName.isEmpty()) {
+            _message.value = "先填书名"
+            return
+        }
+        val resolvedPath = path.trim().ifBlank { previewPath(cleanName) }
+
         viewModelScope.launch {
-            targets.upsert(TargetEntity(name = name.trim(), path = path.trim(), heading = heading.trim()))
+            val id = targets.upsert(
+                TargetEntity(
+                    name = cleanName,
+                    path = resolvedPath,
+                    heading = heading.trim(),
+                    author = author.trim(),
+                    year = year.trim(),
+                )
+            )
+            _state.update { it.copy(selectedTargetId = id) }
+            if (createSkeleton) {
+                if (writeSkeleton(cleanName, resolvedPath, author.trim(), year.trim())) {
+                    targets.markSeeded(id)
+                    _message.value = "已添加「$cleanName」并写入骨架"
+                }
+            } else {
+                _message.value = "已添加目标「$cleanName」"
+            }
+        }
+    }
+
+    /** For a target whose note does not exist yet: the heading has to be created first. */
+    fun createSkeletonFor(target: TargetEntity) {
+        viewModelScope.launch {
+            if (writeSkeleton(target.name, target.path, target.author, target.year)) {
+                targets.markSeeded(target.id)
+            }
         }
     }
 
@@ -230,7 +256,6 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
             )
         )
 
-        rememberBook(current)
         record(current, outcome)
 
         _message.value = when (outcome) {
@@ -238,66 +263,6 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
                 if (outcome.viaClipboard) "已发送，正文走剪贴板" else "已发送"
             SendOutcome.NoObsidian -> "没找到 Obsidian，可能没装或已停用；已存入待发队列"
             is SendOutcome.Failed -> "发送失败：${outcome.message}；已存入待发队列"
-        }
-    }
-
-    /**
-     * Writes the Book skeleton the vault's own template produces.
-     *
-     * Deliberately goes through the official URI: it takes no heading, so it works on a
-     * note that does not exist yet and cannot silently no-op the way a missing heading
-     * does. The skeleton ends with `## Quotes worth keeping`, so the heading is in place
-     * for every send after this one.
-     *
-     * Explicit rather than automatic on purpose — on a note that already exists the
-     * official URI appends, which would duplicate the frontmatter and the heading.
-     */
-    fun createSkeleton() {
-        val current = _state.value
-        val title = current.bookTitle.trim()
-        if (title.isEmpty()) {
-            _message.value = "先填书名"
-            return
-        }
-
-        val skeleton = Defaults.bookSkeleton(
-            title = title,
-            author = current.bookAuthor.trim().ifBlank { null },
-            year = current.bookYear.trim().ifBlank { null },
-            date = LocalDate.now().toString(),
-        )
-
-        val outcome = container.sender.send(
-            WriteRequest(
-                vault = current.settings.vault,
-                filePath = current.bookPath,
-                heading = null,
-                content = skeleton,
-                mode = WriteMode.OFFICIAL,
-                silent = true,
-            )
-        )
-
-        when (outcome) {
-            is SendOutcome.Dispatched -> {
-                viewModelScope.launch {
-                    books.upsert(
-                        BookEntity(
-                            title = title,
-                            author = current.bookAuthor.trim(),
-                            year = current.bookYear.trim(),
-                            seeded = true,
-                            lastUsedAt = System.currentTimeMillis(),
-                        )
-                    )
-                    _state.update {
-                        if (it.bookTitle.trim() == title) it.copy(bookSeeded = true) else it
-                    }
-                }
-                _message.value = "已写入书目骨架：${current.bookPath}"
-            }
-            SendOutcome.NoObsidian -> _message.value = "没找到 Obsidian，可能没装或已停用"
-            is SendOutcome.Failed -> _message.value = "写入骨架失败：${outcome.message}"
         }
     }
 
@@ -318,7 +283,8 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
                         filePath = entry.filePath,
                         heading = entry.heading,
                         content = entry.payload,
-                        mode = runCatching { WriteMode.valueOf(entry.mode) }.getOrDefault(WriteMode.ADVANCED),
+                        mode = runCatching { WriteMode.valueOf(entry.mode) }
+                            .getOrDefault(WriteMode.ADVANCED),
                     )
                 )
                 if (outcome is SendOutcome.Dispatched) {
@@ -335,23 +301,35 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
 
     // ---- plumbing ----------------------------------------------------------
 
-    private fun rememberBook(state: ShareUiState) {
-        val title = state.bookTitle.trim()
-        if (title.isEmpty()) return
-        viewModelScope.launch {
-            // Preserve `seeded`: REPLACE would otherwise wipe the fact that the skeleton is written.
-            val seeded = books.find(title)?.seeded ?: false
-            books.upsert(
-                BookEntity(
-                    title = title,
-                    author = state.bookAuthor.trim(),
-                    year = state.bookYear.trim(),
-                    seeded = seeded,
-                    lastUsedAt = System.currentTimeMillis(),
-                )
+    /**
+     * Written through the official URI on purpose: it has no heading parameter, so it works
+     * on a note that does not exist yet and cannot no-op the way a missing heading does.
+     */
+    private fun writeSkeleton(name: String, path: String, author: String, year: String): Boolean {
+        val skeleton = Defaults.bookSkeleton(
+            title = name,
+            author = author.ifBlank { null },
+            year = year.ifBlank { null },
+            date = LocalDate.now().toString(),
+        )
+        val outcome = container.sender.send(
+            WriteRequest(
+                vault = _state.value.settings.vault,
+                filePath = path,
+                heading = null,
+                content = skeleton,
+                mode = WriteMode.OFFICIAL,
             )
-            _state.update {
-                if (it.bookTitle.trim() == title) it.copy(bookSeeded = seeded) else it
+        )
+        return when (outcome) {
+            is SendOutcome.Dispatched -> true
+            SendOutcome.NoObsidian -> {
+                _message.value = "没找到 Obsidian，骨架没写"
+                false
+            }
+            is SendOutcome.Failed -> {
+                _message.value = "骨架写入失败：${outcome.message}"
+                false
             }
         }
     }
@@ -368,7 +346,6 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
                     detail = (outcome as? SendOutcome.Failed)?.message.orEmpty(),
                 )
             )
-            // Only a genuine dispatch failure can be retried; NoObsidian can too, later.
             if (outcome !is SendOutcome.Dispatched) {
                 outbox.insert(
                     OutboxEntity(
@@ -388,11 +365,6 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
     /** Any input change invalidates a hand-edited payload. */
     private fun edit(transform: (ShareUiState) -> ShareUiState) =
         _state.update { transform(it).copy(payloadOverride = null) }
-
-    private fun editBook(transform: (ShareUiState) -> ShareUiState) {
-        edit(transform)
-        rememberBook(_state.value)
-    }
 
     private fun settings(transform: (AppSettings) -> AppSettings) {
         viewModelScope.launch { container.settings.update(transform) }

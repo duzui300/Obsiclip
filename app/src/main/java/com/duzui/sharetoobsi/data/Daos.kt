@@ -8,30 +8,21 @@ import androidx.room.Query
 import kotlinx.coroutines.flow.Flow
 
 @Dao
-interface BookDao {
-    @Query("SELECT * FROM books ORDER BY lastUsedAt DESC")
-    fun observeAll(): Flow<List<BookEntity>>
-
-    @Query("SELECT * FROM books ORDER BY lastUsedAt DESC LIMIT 1")
-    fun observeMostRecent(): Flow<BookEntity?>
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun upsert(book: BookEntity)
-
-    @Query("SELECT * FROM books WHERE title = :title")
-    suspend fun find(title: String): BookEntity?
-
-    @Query("DELETE FROM books WHERE title = :title")
-    suspend fun delete(title: String)
-}
-
-@Dao
 interface TargetDao {
     @Query("SELECT * FROM targets ORDER BY sortOrder, id")
     fun observeAll(): Flow<List<TargetEntity>>
 
+    @Query("SELECT * FROM targets ORDER BY sortOrder, id")
+    suspend fun all(): List<TargetEntity>
+
+    @Query("SELECT * FROM targets WHERE name = :name LIMIT 1")
+    suspend fun findByName(name: String): TargetEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun upsert(target: TargetEntity)
+    suspend fun upsert(target: TargetEntity): Long
+
+    @Query("UPDATE targets SET seeded = 1 WHERE id = :id")
+    suspend fun markSeeded(id: Long)
 
     @Query("DELETE FROM targets WHERE id = :id")
     suspend fun delete(id: Long)
