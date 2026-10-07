@@ -85,31 +85,43 @@ domain/     pure Kotlin, no Android — the whole pipeline, covered by JVM tests
   UserProfile    compiles the rules a user wrote, naming the ones that do not parse
 send/       ObsidianSender: dispatch, clipboard fallback above 16k chars, failure kinds
             ShareShortcuts: pushes saved targets as Direct Share targets
-data/       Room (targets/formats/profiles/app_profiles/history/outbox) + DataStore
-ui/         Compose: ShareScreen, SettingsScreen, AddTargetDialog, ProfileEditorDialog,
-            SettingsFormats, HistoryScreen, Reorderable, QuoteTileService
+data/       Room (targets/books/formats/profiles/app_profiles/history/outbox) + DataStore
+ui/         Compose: ShareScreen, SettingsScreen, AddTargetDialog, AddBookDialog,
+            ProfileEditorDialog, SettingsFormats, SettingsProfiles, HistoryScreen,
+            Reorderable, QuoteTileService
 ```
 
 `domain/` deliberately has no Android dependency. Keep it that way — it is why the
 pipeline is testable without a device.
 
-**A target is the only destination concept.** A book, the inbox, or any other note are all
-just rows in `targets`, ordered by one `sortOrder` column that the chip row and the
-settings list both read — which is why they cannot drift apart. Consequences worth
-keeping: the book name is never inferred from the share text (one misread title files a
-highlight into a new note beside the one it belongs in), and the inbox is seeded once but
-never restored when missing, because putting it back after the user deleted it would be
-overriding them.
+**A capture is a target paired with a book.** Two axes, deliberately independent:
+
+- **A target is where it goes** — path, section, output format. Its path is a *template*,
+  so one `30-Reading/Book/{title}.md` target serves every book rather than needing a row
+  each. That is what replaced a target per book.
+- **A book is what is being read** — title, author, year, and nothing else. It fills
+  `{title}`/`{author}`/`{year}` and decides nothing about where the words land.
+
+Keeping these apart is the point: describing a book once should not also decide which file
+it is filed in, and a destination should not have to be duplicated per title. The book name
+is still never inferred from the share text — one misread title files a highlight into a
+new note beside the one it belongs in.
 
 **Output template precedence, most specific first:** the target's chosen format, then the
 rule set's own template, then the default. The target wins because it knows the vault's
 convention for that note; the rule set only knows the shape of what comes in.
 
+**Silent writing cannot mean what it sounds like.** A URI can only be handled by starting
+Obsidian, so the app is always pulled forward and `openmode=silent` can only mean "don't
+open the note". Quiet therefore also passes the `x-success` callback, and starting our own
+activity is what returns the user to the front — see `isReturnCallback` in `MainActivity`.
+
 **Migrations are hand-written.** Room validates the live schema against the entities on
 open, so a hand-written `CREATE TABLE` that differs by a column default crashes at
 runtime. The two things that bite: a non-null column with no `@ColumnInfo(defaultValue)`
 must be created without `DEFAULT`, and `ALTER TABLE ADD COLUMN` on a non-null column
-*requires* one. Check on a device — a unit test cannot see this.
+*requires* one. Dropping a column needs a rebuild-copy-rename, because SQLite cannot drop
+one on the oldest supported devices. Check on a device — a unit test cannot see this.
 
 **The app outlives a write**, so anything still on screen when it is reopened is stale by
 definition. That is why adopting the clipboard overwrites rather than refusing to replace
