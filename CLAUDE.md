@@ -17,7 +17,7 @@ There is **no `java`, `gradle`, or `adb` on `PATH`** on this machine. Use absolu
 
 ```bash
 export JAVA_HOME="D:/DevEnv/AndroidStudioMy/jbr"          # Android Studio's bundled JBR 21
-./gradlew :app:testDebugUnitTest                          # 40 pure-logic tests, no device needed
+./gradlew :app:testDebugUnitTest                          # 37 pure-logic tests, no device needed
 ./gradlew :app:assembleDebug
 "$LOCALAPPDATA/Android/Sdk/platform-tools/adb.exe" install -r app/build/outputs/apk/debug/app-debug.apk
 ```
@@ -80,16 +80,21 @@ None of this is in Obsidian's documentation.
 domain/     pure Kotlin, no Android — the whole pipeline, covered by JVM tests
   Cleanup        the ordered stages that turn shared text into quote text
   Template       {placeholder} rendering, with empty-value pruning
-  ShareParser    reads the book identity out of a share preamble
   ObsidianUri    builds both URIs; percent-encoding rules live here
-  SourceProfile  per-app strip rules (Kindle + a generic default)
+  SourceProfile  share-chrome rules (universal) plus Kindle's own
 send/       ObsidianSender: dispatch, clipboard fallback above 16k chars, failure kinds
-data/       Room (books/targets/history/outbox) + DataStore (settings)
-ui/         Compose: ShareScreen, SettingsScreen
+data/       Room (targets/history/outbox) + DataStore (settings)
+ui/         Compose: ShareScreen, SettingsScreen, AddTargetDialog
 ```
 
 `domain/` deliberately has no Android dependency. Keep it that way — it is why the
 pipeline is testable without a device.
+
+**A book is a target, not its own concept.** Its author and year exist only to fill the
+`{author}` and `{year}` placeholders for that book's quotes, so they live on the target
+row. The book name is never inferred from the share text: one misread title files a
+highlight into a new note beside the one it belongs in, and the right target is usually
+already saved.
 
 ## Known gaps
 
