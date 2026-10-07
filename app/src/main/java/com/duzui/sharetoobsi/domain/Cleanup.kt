@@ -5,6 +5,8 @@ data class CleanupOptions(
     val normalize: Boolean = true,
     val stripBoilerplate: Boolean = true,
     val stripLoneUrlLines: Boolean = true,
+    /** Drops footers shaped like `開始免費閱讀這本書：https://…` — a short label ending in a link. */
+    val dropLinkFooterLines: Boolean = true,
     val unwrapLines: Boolean = true,
     val collapseBlankLines: Boolean = true,
     val wrapHighlight: Boolean = false,
@@ -36,6 +38,18 @@ object Cleanup {
 
     private val LONE_URL_LINE = Regex("^<?https?://\\S+>?$")
 
+    /**
+     * A line that ends in a link, capturing whatever label precedes it.
+     *
+     * The separator is required: `開始免費閱讀這本書：https://…` is share chrome, whereas
+     * `引用内容 https://…` is a quote that happens to end in a link, and dropping that
+     * would silently lose the highlight.
+     */
+    private val LINK_FOOTER = Regex("""^(.*?)\s*[：:，,、—–\-]+\s*<?https?://\S+>?\s*$""")
+
+    /** Longest label that still counts as a footer rather than part of the quote. */
+    private const val LINK_FOOTER_MAX = 40
+
     private val ZERO_WIDTH = Regex("[\\u200B-\\u200D\\uFEFF\\u2060]")
 
     private val TRAILING_WHITESPACE = Regex("[ \\t]+$")
@@ -50,8 +64,14 @@ object Cleanup {
     ): String {
         var text = raw
         if (options.normalize) text = normalize(text)
-        if (options.stripBoilerplate || options.stripLoneUrlLines) {
-            text = stripBoilerplate(text, profile, extraLineRules, options.stripLoneUrlLines)
+        if (options.stripBoilerplate || options.stripLoneUrlLines || options.dropLinkFooterLines) {
+            text = stripBoilerplate(
+                text = text,
+                profile = profile,
+                extraLineRules = extraLineRules,
+                dropLoneUrls = options.stripLoneUrlLines,
+                dropLinkFooters = options.dropLinkFooterLines,
+            )
         }
         if (options.unwrapLines) text = unwrapLines(text)
         if (options.collapseBlankLines) text = collapseBlankLines(text)
@@ -71,34 +91,49 @@ object Cleanup {
         .replace(ZERO_WIDTH, "")
 
     /**
-     * Drops whole lines: bare links, plus whatever the source profile and the user's own
-     * rules reject. Inline patterns edit within a line instead, so `quote https://t.co/x`
-     * keeps the quote.
+     * Drops whole lines: bare links, `label + link` footers, plus whatever the source
+     * profile and the user's own rules reject. Inline patterns edit within a line instead,
+     * so `quote https://t.co/x` keeps the quote.
+     *
+     * Lines are classified *before* the inline patterns run, because once the URLs are
+     * gone a footer like `開始免費閱讀這本書：https://…` is indistinguishable from a short
+     * line of the quote.
      */
     private fun stripBoilerplate(
         text: String,
         profile: SourceProfile,
         extraLineRules: List<Regex>,
         dropLoneUrls: Boolean,
+        dropLinkFooters: Boolean,
     ): String {
-        var result = text
-        for (pattern in profile.inlinePatterns) {
-            result = pattern.replace(result, "")
-        }
-
         val lineRules = buildList {
             if (dropLoneUrls) add(LONE_URL_LINE)
             addAll(profile.linePatterns)
             addAll(extraLineRules)
         }
-        if (lineRules.isEmpty()) return result
 
-        return result.lines()
+        val kept = text.lines()
             .filterNot { line ->
                 val trimmed = line.trim()
-                trimmed.isNotEmpty() && lineRules.any { it.matches(trimmed) }
+                when {
+                    trimmed.isEmpty() -> false
+                    lineRules.any { it.matches(trimmed) } -> true
+                    dropLinkFooters && isLinkFooter(trimmed) -> true
+                    else -> false
+                }
             }
             .joinToString("\n")
+
+        return profile.inlinePatterns.fold(kept) { acc, pattern -> pattern.replace(acc, "") }
+    }
+
+    /** `開始免費閱讀這本書：https://…` — a short label whose line ends in a link. */
+    private fun isLinkFooter(line: String): Boolean {
+        val match = LINK_FOOTER.find(line) ?: return false
+        val label = match.groupValues[1].trim()
+        return label.isNotEmpty() &&
+            label.length <= LINK_FOOTER_MAX &&
+            !SENTENCE_END.containsMatchIn(label)
     }
 
     private fun unwrapLines(text: String): String =

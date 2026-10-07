@@ -110,6 +110,26 @@ class CleanupTest {
     }
 
     @Test
+    fun `drops a short label whose line ends in a link`() {
+        val input = "「僕にはまだ、お母さんが必要なんだよ。」\n" +
+            "開始免費閱讀這本書：https://read.amazon.co.jp/kp/kshare?asin=B092J53NPG"
+        assertEquals(
+            "「僕にはまだ、お母さんが必要なんだよ。」",
+            Cleanup.clean(input, SourceProfiles.GENERIC, plain),
+        )
+    }
+
+    @Test
+    fun `drops a share preamble that names the book even without a known source`() {
+        val input = "我在 平野啓一郎 所著的《本心》中讀到以下這段引述時：\n" +
+            "僕にはまだ、お母さんが必要なんだな。"
+        val expected = "僕にはまだ、お母さんが必要なんだな。"
+        assertEquals(expected, Cleanup.clean(input, SourceProfiles.KINDLE, plain))
+        // The sharing package is not always reported, so this must not depend on it.
+        assertEquals(expected, Cleanup.clean(input, SourceProfiles.GENERIC, plain))
+    }
+
+    @Test
     fun `honours a user supplied line rule`() {
         val input = "正文\n广告：点击购买"
         assertEquals(

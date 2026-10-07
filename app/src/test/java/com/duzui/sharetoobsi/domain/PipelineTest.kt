@@ -37,6 +37,41 @@ class PipelineTest {
     }
 
     @Test
+    fun `a real kindle share reduces to just the quote, filed under the existing note`() {
+        val shared = """
+            我在 平野啓一郎 所著的《本心 (Japanese Edition)》中讀到以下這段引述時，就想到您：
+            「僕にはまだ、お母さんが必要なんだよ。」
+            開始免費閱讀這本書：https://read.amazon.co.jp/kp/kshare?asin=B092J53NPG&ref_=kar_wh_ca
+        """.trimIndent()
+
+        val hint = ShareParser.extract(shared)
+        val cleaned = Cleanup.clean(shared, SourceProfiles.KINDLE)
+
+        val rendered = Template.render(
+            Defaults.TEMPLATE,
+            TemplateValues(
+                text = cleaned,
+                title = hint.title,
+                author = hint.author,
+                tags = Defaults.TAGS,
+            ),
+        )
+
+        assertEquals(
+            "> 「僕にはまだ、お母さんが必要なんだよ。」\n\n> — 平野啓一郎《本心》 #reading",
+            rendered,
+        )
+        // The vault already holds 本心.md; the edition marker must not create a second note.
+        assertEquals(
+            "30-Reading/Book/本心.md",
+            Template.substitute(
+                Defaults.BOOK_PATH_TEMPLATE,
+                TemplateValues(text = "", title = hint.title),
+            ),
+        )
+    }
+
+    @Test
     fun `the rendered quote lands under the heading the vault expects`() {
         val rendered = Template.render(
             Defaults.TEMPLATE,

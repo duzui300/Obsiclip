@@ -11,16 +11,26 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.duzui.sharetoobsi.ui.SettingsScreen
 import com.duzui.sharetoobsi.ui.ShareScreen
 import com.duzui.sharetoobsi.ui.theme.ShareTransTheme
 
 class MainActivity : ComponentActivity() {
 
     private var incoming by mutableStateOf<IncomingShare?>(null)
+    private var showSettings by mutableStateOf(false)
+
+    private val container by lazy { AppContainer(this) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        if (isReturnCallback(intent)) {
+            returnToSourceApp()
+            return
+        }
+
         incoming = readIncoming()
         setContent {
             ShareTransTheme {
@@ -30,20 +40,44 @@ class MainActivity : ComponentActivity() {
 
                 LaunchedEffect(incoming) { viewModel.onShare(incoming) }
 
-                ShareScreen(
-                    state = state,
-                    message = message,
-                    onProfileChange = viewModel::setProfile,
-                    onBookTitleChange = viewModel::setBookTitle,
-                    onBookAuthorChange = viewModel::setBookAuthor,
-                    onBookYearChange = viewModel::setBookYear,
-                    onTagsChange = viewModel::setTags,
-                    onModeChange = viewModel::setMode,
-                    onPayloadEdit = viewModel::editPayload,
-                    onRegenerate = viewModel::regenerate,
-                    onSend = viewModel::send,
-                    onMessageShown = viewModel::messageShown,
-                )
+                if (showSettings) {
+                    SettingsScreen(
+                        settings = state.settings,
+                        targets = state.savedTargets,
+                        onBack = { showSettings = false },
+                        onVault = viewModel::setVault,
+                        onHeading = viewModel::setHeading,
+                        onTemplate = viewModel::setTemplate,
+                        onPathTemplate = viewModel::setPathTemplate,
+                        onInboxPath = viewModel::setInboxPath,
+                        onTags = viewModel::setTags,
+                        onMode = viewModel::setMode,
+                        onSilent = viewModel::setSilent,
+                        onReturnToSource = viewModel::setReturnToSource,
+                        onCleanup = viewModel::setCleanup,
+                        onSaveTarget = viewModel::saveTarget,
+                        onDeleteTarget = viewModel::deleteTarget,
+                        onRetryOutbox = viewModel::retryOutbox,
+                    )
+                } else {
+                    ShareScreen(
+                        state = state,
+                        message = message,
+                        onProfileChange = viewModel::setProfile,
+                        onBookTitleChange = viewModel::setBookTitle,
+                        onBookAuthorChange = viewModel::setBookAuthor,
+                        onBookYearChange = viewModel::setBookYear,
+                        onTagsChange = viewModel::setTags,
+                        onModeChange = viewModel::setMode,
+                        onSelectTarget = viewModel::selectTarget,
+                        onPayloadEdit = viewModel::editPayload,
+                        onRegenerate = viewModel::regenerate,
+                        onCreateSkeleton = viewModel::createSkeleton,
+                        onSend = viewModel::send,
+                        onOpenSettings = { showSettings = true },
+                        onMessageShown = viewModel::messageShown,
+                    )
+                }
             }
         }
     }
@@ -51,7 +85,28 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        if (isReturnCallback(intent)) {
+            returnToSourceApp()
+            return
+        }
         incoming = readIncoming()
+    }
+
+    /** Obsidian hands control back on this URI once the write is done. */
+    private fun isReturnCallback(intent: Intent?): Boolean =
+        intent?.action == Intent.ACTION_VIEW && intent.data?.scheme == RETURN_SCHEME
+
+    private fun returnToSourceApp() {
+        val sourcePackage = container.pendingReturn.take()
+        if (sourcePackage != null) {
+            // Null when the app is not launchable from a drawer, or is no longer visible
+            // to us; in that case simply closing leaves the user in Obsidian, which is
+            // where they already are.
+            packageManager.getLaunchIntentForPackage(sourcePackage)?.let { launch ->
+                startActivity(launch)
+            }
+        }
+        finish()
     }
 
     private fun readIncoming(): IncomingShare? {
@@ -80,4 +135,8 @@ class MainActivity : ComponentActivity() {
     /** The system fills the referrer with the sharing app when we are started from the share sheet. */
     private fun sourcePackage(): String? =
         referrer?.host ?: referrer?.authority
+
+    private companion object {
+        const val RETURN_SCHEME = "sharetoobsi"
+    }
 }

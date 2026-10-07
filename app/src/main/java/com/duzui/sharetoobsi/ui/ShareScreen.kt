@@ -1,5 +1,6 @@
 package com.duzui.sharetoobsi.ui
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -10,12 +11,16 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -51,9 +56,12 @@ fun ShareScreen(
     onBookYearChange: (String) -> Unit,
     onTagsChange: (String) -> Unit,
     onModeChange: (WriteMode) -> Unit,
+    onSelectTarget: (Long?) -> Unit,
     onPayloadEdit: (String) -> Unit,
     onRegenerate: () -> Unit,
+    onCreateSkeleton: () -> Unit,
     onSend: () -> Unit,
+    onOpenSettings: () -> Unit,
     onMessageShown: () -> Unit,
 ) {
     val snackbar = remember { SnackbarHostState() }
@@ -65,7 +73,16 @@ fun ShareScreen(
     }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("摘录入 Obsidian") }) },
+        topBar = {
+            TopAppBar(
+                title = { Text("摘录入 Obsidian") },
+                actions = {
+                    IconButton(onClick = onOpenSettings) {
+                        Icon(Icons.Filled.Settings, contentDescription = "设置")
+                    }
+                },
+            )
+        },
         snackbarHost = { SnackbarHost(snackbar) },
     ) { insets ->
         Column(
@@ -87,9 +104,16 @@ fun ShareScreen(
                 Text("写入 Obsidian", style = MaterialTheme.typography.titleMedium)
             }
 
-            TargetCard(state)
+            TargetSection(state, onSelectTarget)
             PayloadField(state, onPayloadEdit, onRegenerate)
-            BookFields(state, onBookTitleChange, onBookAuthorChange, onBookYearChange, onTagsChange)
+            BookFields(
+                state = state,
+                onTitle = onBookTitleChange,
+                onAuthor = onBookAuthorChange,
+                onYear = onBookYearChange,
+                onTags = onTagsChange,
+                onCreateSkeleton = onCreateSkeleton,
+            )
             SourcePicker(state, onProfileChange)
             ModePicker(state, onModeChange)
         }
@@ -97,28 +121,49 @@ fun ShareScreen(
 }
 
 @Composable
-private fun SourcePicker(state: ShareUiState, onProfileChange: (SourceProfile) -> Unit) {
-    var expanded by remember { mutableStateOf(false) }
-
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            "来源：${state.sourcePackage ?: "未知"}",
-            style = MaterialTheme.typography.bodySmall,
-        )
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("清洗规则", modifier = Modifier.weight(1f))
-            OutlinedButton(onClick = { expanded = true }) { Text(state.profile.label) }
-            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                SourceProfiles.ALL.forEach { profile ->
-                    DropdownMenuItem(
-                        text = { Text(profile.label) },
-                        onClick = {
-                            onProfileChange(profile)
-                            expanded = false
+private fun TargetSection(state: ShareUiState, onSelectTarget: (Long?) -> Unit) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    FilterChip(
+                        selected = state.selectedTargetId == null,
+                        onClick = { onSelectTarget(null) },
+                        label = {
+                            Text(
+                                if (state.targetsBook) "当前书目" else "收件箱",
+                            )
                         },
                     )
+                    state.savedTargets.forEach { target ->
+                        FilterChip(
+                            selected = state.selectedTargetId == target.id,
+                            onClick = { onSelectTarget(target.id) },
+                            label = { Text(target.name) },
+                        )
+                    }
                 }
             }
+
+            Text(
+                state.targetPath,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Text(
+                when {
+                    state.settings.mode == WriteMode.OFFICIAL ->
+                        "追加到文件末尾 —— 官方 URI 无法指定小节"
+                    state.effectiveHeading != null -> "追加到小节：${state.effectiveHeading}"
+                    else -> "追加到文件末尾"
+                },
+                style = MaterialTheme.typography.bodySmall,
+            )
         }
     }
 }
@@ -130,8 +175,16 @@ private fun BookFields(
     onAuthor: (String) -> Unit,
     onYear: (String) -> Unit,
     onTags: (String) -> Unit,
+    onCreateSkeleton: () -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (state.hintApplied) {
+            Text(
+                "书名和作者是从分享内容里认出来的，可以直接改",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
         OutlinedTextField(
             value = state.bookTitle,
             onValueChange = onTitle,
@@ -156,35 +209,24 @@ private fun BookFields(
             )
         }
         OutlinedTextField(
-            value = state.tags,
+            value = state.settings.tags,
             onValueChange = onTags,
             label = { Text("标签") },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
-    }
-}
 
-@Composable
-private fun TargetCard(state: ShareUiState) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
+        if (state.targetsBook && !state.bookSeeded) {
+            // A heading that does not exist makes Obsidian write nothing and report
+            // nothing, so a brand new book needs its skeleton created first.
             Text(
-                if (state.targetsBook) "目标笔记" else "目标笔记（没填书名，落到收件箱）",
-                style = MaterialTheme.typography.labelMedium,
-            )
-            Text(state.targetPath, style = MaterialTheme.typography.bodyMedium)
-            Text(
-                when {
-                    state.mode == WriteMode.OFFICIAL -> "追加到文件末尾 —— 官方 URI 无法指定小节"
-                    state.effectiveHeading != null -> "追加到小节：${state.effectiveHeading}"
-                    else -> "追加到文件末尾"
-                },
+                "Obsidian 找不到「${state.effectiveHeading ?: "目标小节"}」时会静默不写。" +
+                    "这是本新书的话，先把骨架建起来。",
                 style = MaterialTheme.typography.bodySmall,
             )
+            OutlinedButton(onClick = onCreateSkeleton, modifier = Modifier.fillMaxWidth()) {
+                Text("新建书目骨架（已有笔记请勿点）")
+            }
         }
     }
 }
@@ -221,17 +263,44 @@ private fun PayloadField(
 }
 
 @Composable
+private fun SourcePicker(state: ShareUiState, onProfileChange: (SourceProfile) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            "来源：${state.sourcePackage ?: "未知"}",
+            style = MaterialTheme.typography.bodySmall,
+        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("清洗规则", modifier = Modifier.weight(1f))
+            OutlinedButton(onClick = { expanded = true }) { Text(state.profile.label) }
+            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                SourceProfiles.ALL.forEach { profile ->
+                    DropdownMenuItem(
+                        text = { Text(profile.label) },
+                        onClick = {
+                            onProfileChange(profile)
+                            expanded = false
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun ModePicker(state: ShareUiState, onModeChange: (WriteMode) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text("写入方式", style = MaterialTheme.typography.labelMedium)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(
-                selected = state.mode == WriteMode.ADVANCED,
+                selected = state.settings.mode == WriteMode.ADVANCED,
                 onClick = { onModeChange(WriteMode.ADVANCED) },
                 label = { Text("Advanced URI") },
             )
             FilterChip(
-                selected = state.mode == WriteMode.OFFICIAL,
+                selected = state.settings.mode == WriteMode.OFFICIAL,
                 onClick = { onModeChange(WriteMode.OFFICIAL) },
                 label = { Text("官方 URI") },
             )

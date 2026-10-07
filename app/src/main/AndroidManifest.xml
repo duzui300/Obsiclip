@@ -1,11 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Android 11+ package visibility: needed to probe whether Obsidian is installed. -->
+    <!-- Android 11+ package visibility. `obsidian` is needed to probe whether Obsidian is
+         installed; launcher apps are needed to hand the user back to the app they shared
+         from, which is only ever known at runtime. -->
     <queries>
         <intent>
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="obsidian" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
         </intent>
     </queries>
 
@@ -47,6 +53,15 @@
                 <action android:name="android.intent.action.PROCESS_TEXT" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="text/plain" />
+            </intent-filter>
+
+            <!-- Obsidian calls this back once it has handled the write, which is the only
+                 reliable signal that it is safe to return the user to the source app. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="sharetoobsi" />
             </intent-filter>
         </activity>
     </application>

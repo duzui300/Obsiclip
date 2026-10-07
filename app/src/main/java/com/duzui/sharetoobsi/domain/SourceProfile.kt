@@ -21,10 +21,23 @@ data class SourceProfile(
 
 object SourceProfiles {
 
-    /** Fallback for any app we have no profile for. Deliberately conservative. */
-    val GENERIC = SourceProfile(
-        id = "generic",
-        label = "通用",
+    /**
+     * Lines no genuine quote would ever be: the preamble a reading app wraps around a
+     * highlight, and its calls to action. Kept here rather than in one app's profile
+     * because the sharing package is not always reported, and a Kindle highlight that
+     * arrives as "generic" should still come out clean.
+     */
+    private val SHARE_CHROME_LINES = listOf(
+        // Kindle's share preamble; the book identity is read out of it separately.
+        Regex("""^我在\s*.{0,40}?所著的\s*《.*》.*$"""),
+        Regex("""^「?.*」?\s*を読んでいます.*$"""),
+        // Calls to action, whether or not the link survived.
+        Regex("""^.*(開始免費閱讀|开始免费阅读|免費閱讀這本書|免费阅读这本书|在此处购买|查看详情|前往阅读)"""),
+        Regex("""^.*(無料で読む|続きを読む|今すぐ読む|本を読む)"""),
+        Regex(
+            """^(read more|start reading|continue reading|buy now|buy the book|read this quote|keep reading)\b.*$""",
+            RegexOption.IGNORE_CASE,
+        ),
     )
 
     val KINDLE = SourceProfile(
@@ -32,44 +45,33 @@ object SourceProfiles {
         label = "Kindle",
         packages = listOf("com.amazon.kindle", "com.amazon.kindlefc"),
         inlinePatterns = listOf(
-            // Kindle appends a store/short link to the highlight.
+            // Kindle appends a store link to the highlight.
             Regex("""\s*https?://\S+"""),
         ),
-        // Every rule here demands a leading attribution dash. Dropping any line that merely
-        // mentions "amazon" would silently eat a highlight *about* Amazon.
-        linePatterns = listOf(
+        linePatterns = SHARE_CHROME_LINES + listOf(
+            // Attribution offers, e.g. "—— from 《Meditations》 by Marcus Aurelius". The
+            // leading dash is required: dropping any line that merely mentions "amazon"
+            // would silently eat a highlight *about* Amazon.
             Regex("""^\s*[—–\-]{1,3}\s*(from|摘自|来自)\b.*$""", RegexOption.IGNORE_CASE),
-            Regex("""^\s*[—–\-]{1,3}\s*.*\b(kindle|amazon|amzn\.to|a\.co)\b.*$""", RegexOption.IGNORE_CASE),
-            Regex("""^\s*在?\s*Kindle\s*(阅读器|App)?\s*(中|里)?\s*(阅读|查看|购买|分享).*$"""),
+            Regex(
+                """^\s*[—–\-]{1,3}\s*.*\b(kindle|amazon|amzn\.to|a\.co)\b.*$""",
+                RegexOption.IGNORE_CASE,
+            ),
         ),
     )
 
-    val WEREAD = SourceProfile(
-        id = "weread",
-        label = "微信读书",
-        packages = listOf("com.tencent.weread"),
-        inlinePatterns = listOf(
-            Regex("""\s*https?://\S+"""),
-        ),
-        linePatterns = listOf(
-            // 尾部出处行, e.g. "—— 《书名》作者"
-            Regex("""^\s*[—–\-]{1,3}\s*《.*$"""),
-            Regex("""^\s*[—–\-]{1,3}\s*.*(weread\.qq\.com|微信读书).*$"""),
-        ),
+    /**
+     * Everything else. Readest, 小米笔记 and most editors share the selection verbatim, so
+     * beyond the universal share-chrome rules there is nothing app-specific to strip.
+     */
+    val GENERIC = SourceProfile(
+        id = "generic",
+        label = "通用",
+        linePatterns = SHARE_CHROME_LINES,
     )
 
-    val READEST = SourceProfile(
-        id = "readest",
-        label = "Readest",
-        packages = listOf("com.bilingify.readest"),
-        inlinePatterns = listOf(
-            Regex("""\s*https?://\S+"""),
-        ),
-    )
+    val ALL = listOf(KINDLE, GENERIC)
 
-    val ALL = listOf(KINDLE, WEREAD, READEST, GENERIC)
-
-    /** Package names that report a package the user actually shared from. */
     private val byPackage: Map<String, SourceProfile> =
         ALL.flatMap { profile -> profile.packages.map { it to profile } }.toMap()
 
