@@ -29,6 +29,30 @@ interface TargetDao {
 }
 
 @Dao
+interface ProfileDao {
+    @Query("SELECT * FROM profiles ORDER BY id")
+    fun observeAll(): Flow<List<ProfileEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(profile: ProfileEntity): Long
+
+    @Query("DELETE FROM profiles WHERE id = :id")
+    suspend fun delete(id: Long)
+}
+
+@Dao
+interface AppProfileDao {
+    @Query("SELECT * FROM app_profiles")
+    fun observeAll(): Flow<List<AppProfileEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(mapping: AppProfileEntity)
+
+    @Query("DELETE FROM app_profiles WHERE packageName = :packageName")
+    suspend fun delete(packageName: String)
+}
+
+@Dao
 interface HistoryDao {
     @Query("SELECT * FROM history ORDER BY createdAt DESC LIMIT :limit")
     fun observeRecent(limit: Int = 100): Flow<List<HistoryEntity>>

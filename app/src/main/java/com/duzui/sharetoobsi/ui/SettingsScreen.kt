@@ -12,6 +12,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -31,7 +33,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.duzui.sharetoobsi.data.AppSettings
+import com.duzui.sharetoobsi.ShareUiState
+import com.duzui.sharetoobsi.data.ProfileEntity
 import com.duzui.sharetoobsi.data.TargetEntity
 import com.duzui.sharetoobsi.domain.CleanupOptions
 import com.duzui.sharetoobsi.domain.Template
@@ -40,8 +43,7 @@ import com.duzui.sharetoobsi.domain.WriteMode
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
-    settings: AppSettings,
-    targets: List<TargetEntity>,
+    state: ShareUiState,
     onBack: () -> Unit,
     onVault: (String) -> Unit,
     onHeading: (String) -> Unit,
@@ -54,12 +56,20 @@ fun SettingsScreen(
     onAutoReadClipboard: (Boolean) -> Unit,
     onReturnToSource: (Boolean) -> Unit,
     onCleanup: (CleanupOptions) -> Unit,
+    onDefaultProfileId: (String) -> Unit,
+    onSaveProfile: (Long?, String, String, String, String) -> Unit,
+    onDeleteProfile: (ProfileEntity) -> Unit,
+    onSetAppMapping: (String, String) -> Unit,
+    onClearAppMapping: (String) -> Unit,
     onSaveTarget: (String, String, String, String, String, Boolean) -> Unit,
     onDerivePath: (String) -> String,
     onDeleteTarget: (TargetEntity) -> Unit,
+    onOpenHistory: () -> Unit,
     onRetryOutbox: () -> Unit,
 ) {
+    val settings = state.settings
     var addingTarget by remember { mutableStateOf(false) }
+    var profileMenu by remember { mutableStateOf(false) }
 
     if (addingTarget) {
         AddTargetDialog(
@@ -97,7 +107,7 @@ fun SettingsScreen(
             Field("Vault 名称", settings.vault, onVault)
             Field("小节标题", settings.heading, onHeading, "留空则追加到文件末尾")
             Field("书目路径模板", settings.pathTemplate, onPathTemplate, "可用 {title} {author} {year} {date}")
-            Field("收件箱笔记", settings.inboxPath, onInboxPath, "没填书名时写到这里")
+            Field("收件箱笔记", settings.inboxPath, onInboxPath, "没选书目时写到这里")
 
             Section("输出格式")
             Field(
@@ -129,8 +139,7 @@ fun SettingsScreen(
             Toggle("静默写入（不跳到 Obsidian）", settings.silent, onSilent)
             Toggle("打开 App 时自动读取剪贴板", settings.autoReadClipboard, onAutoReadClipboard)
             Text(
-                "只在从桌面或磁贴打开时生效；由分享进入时不受影响。" +
-                    "快捷设置磁贴始终读取剪贴板。",
+                "只在从桌面或磁贴打开时生效；由分享进入时不受影响。快捷设置磁贴始终读取剪贴板。",
                 style = MaterialTheme.typography.bodySmall,
             )
             Toggle("写入后返回来源 App", settings.returnToSource, onReturnToSource)
@@ -148,13 +157,49 @@ fun SettingsScreen(
             Toggle("包成引用块", cleanup.wrapQuote) { onCleanup(cleanup.copy(wrapQuote = it)) }
             Toggle("包成 ==高亮==（在引用块内）", cleanup.wrapHighlight) { onCleanup(cleanup.copy(wrapHighlight = it)) }
 
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("默认规则", modifier = Modifier.weight(1f))
+                OutlinedButton(onClick = { profileMenu = true }) {
+                    Text(state.availableProfiles.firstOrNull { it.id == settings.defaultProfileId }?.label ?: "通用")
+                }
+                DropdownMenu(expanded = profileMenu, onDismissRequest = { profileMenu = false }) {
+                    state.availableProfiles.forEach { profile ->
+                        DropdownMenuItem(
+                            text = { Text(profile.label) },
+                            onClick = {
+                                onDefaultProfileId(profile.id)
+                                profileMenu = false
+                            },
+                        )
+                    }
+                }
+            }
+            Text("认不出来源的分享用这套规则。", style = MaterialTheme.typography.bodySmall)
+
+            Section("自定义规则")
+            RulesSection(
+                userProfiles = state.userProfiles,
+                placeholderTemplate = settings.template,
+                onSave = onSaveProfile,
+                onDelete = onDeleteProfile,
+            )
+
+            Section("按 App 指定规则")
+            AppProfileSection(
+                installedApps = state.installedApps,
+                mappings = state.appMappings,
+                availableProfiles = state.availableProfiles,
+                onSet = onSetAppMapping,
+                onClear = onClearAppMapping,
+            )
+
             Section("预设目标")
             Text(
                 "把正在读的几本书加进来，分享时点一下芯片就能选，不用每次打字。",
                 style = MaterialTheme.typography.bodySmall,
             )
             Button(onClick = { addingTarget = true }) { Text("添加目标") }
-            targets.forEach { target ->
+            state.savedTargets.forEach { target ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(target.name, style = MaterialTheme.typography.bodyMedium)
@@ -180,13 +225,16 @@ fun SettingsScreen(
                 HorizontalDivider()
             }
 
-            Section("待发队列")
+            Section("记录")
+            OutlinedButton(onClick = onOpenHistory, modifier = Modifier.fillMaxWidth()) {
+                Text("发送历史（${state.history.size} 条）")
+            }
             Text(
-                "发送失败的条目会存在这里。为避免打扰，只在你打开本 App 时重发 —— " +
+                "发送失败的条目会进待发队列。为避免打扰，只在你打开本 App 时重发 —— " +
                     "Android 不允许后台启动 Obsidian。",
                 style = MaterialTheme.typography.bodySmall,
             )
-            Button(onClick = onRetryOutbox) { Text("立即重发") }
+            Button(onClick = onRetryOutbox) { Text("立即重发待发队列") }
         }
     }
 }
@@ -211,9 +259,7 @@ private fun Field(
         label = { Text(label) },
         supportingText = supporting?.let { { Text(it) } },
         singleLine = singleLine,
-        modifier = Modifier
-            .fillMaxWidth()
-            .let { if (singleLine) it else it.padding(top = 0.dp) },
+        modifier = Modifier.fillMaxWidth(),
     )
 }
 

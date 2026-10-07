@@ -10,6 +10,7 @@ package com.duzui.sharetoobsi.domain
  * @param packages     app package names this profile auto-selects for.
  * @param linePatterns whole lines whose trimmed content matches are dropped.
  * @param inlinePatterns matches inside a line are deleted, leaving the rest of the line.
+ * @param template     output template for this profile; blank uses the global one.
  */
 data class SourceProfile(
     val id: String,
@@ -17,6 +18,7 @@ data class SourceProfile(
     val packages: List<String> = emptyList(),
     val linePatterns: List<Regex> = emptyList(),
     val inlinePatterns: List<Regex> = emptyList(),
+    val template: String = "",
 )
 
 object SourceProfiles {

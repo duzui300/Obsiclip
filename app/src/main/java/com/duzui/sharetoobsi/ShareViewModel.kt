@@ -3,9 +3,11 @@ package com.duzui.sharetoobsi
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.duzui.sharetoobsi.data.AppProfileEntity
 import com.duzui.sharetoobsi.data.AppSettings
 import com.duzui.sharetoobsi.data.HistoryEntity
 import com.duzui.sharetoobsi.data.OutboxEntity
+import com.duzui.sharetoobsi.data.ProfileEntity
 import com.duzui.sharetoobsi.data.TargetEntity
 import com.duzui.sharetoobsi.domain.Cleanup
 import com.duzui.sharetoobsi.domain.CleanupOptions
@@ -16,14 +18,19 @@ import com.duzui.sharetoobsi.domain.Template
 import com.duzui.sharetoobsi.domain.TemplateValues
 import com.duzui.sharetoobsi.domain.WriteMode
 import com.duzui.sharetoobsi.domain.WriteRequest
+import com.duzui.sharetoobsi.domain.userProfile
+import com.duzui.sharetoobsi.domain.userProfileId
 import com.duzui.sharetoobsi.send.SendOutcome
+import com.duzui.sharetoobsi.send.ShareShortcuts
 import java.time.LocalDate
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /** Obsidian calls this back once it has handled the URI, if the user asked to be returned. */
 const val RETURN_CALLBACK = "sharetoobsi://return"
@@ -39,6 +46,13 @@ data class ShareUiState(
     val sourcePackage: String? = null,
     val profile: SourceProfile = SourceProfiles.GENERIC,
     val settings: AppSettings = AppSettings(),
+    /** Built-ins plus whatever the user has written. */
+    val availableProfiles: List<SourceProfile> = SourceProfiles.ALL,
+    val userProfiles: List<ProfileEntity> = emptyList(),
+    /** Source package to profile id. */
+    val appMappings: Map<String, String> = emptyMap(),
+    val installedApps: List<AppEntry> = emptyList(),
+    val history: List<HistoryEntity> = emptyList(),
     val savedTargets: List<TargetEntity> = emptyList(),
     /** null is the inbox: whatever is being captured without naming a book first. */
     val selectedTargetId: Long? = null,
@@ -57,7 +71,10 @@ data class ShareUiState(
         date = LocalDate.now().toString(),
     )
 
-    val payload: String = payloadOverride ?: Template.render(settings.template, values)
+    /** A user-written profile may carry its own output shape. */
+    val effectiveTemplate: String = profile.template.ifBlank { settings.template }
+
+    val payload: String = payloadOverride ?: Template.render(effectiveTemplate, values)
 
     val targetPath: String = chosenTarget?.path ?: settings.inboxPath
 
@@ -74,12 +91,17 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
     private val targets = container.db.targets()
     private val history = container.db.history()
     private val outbox = container.db.outbox()
+    private val profiles = container.db.profiles()
+    private val appProfiles = container.db.appProfiles()
 
     private val _state = MutableStateFlow(ShareUiState())
     val state: StateFlow<ShareUiState> = _state.asStateFlow()
 
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message.asStateFlow()
+
+    /** A target chosen before the list finished loading, e.g. from a Direct Share shortcut. */
+    private var pendingTargetId: Long? = null
 
     init {
         viewModelScope.launch {
@@ -89,15 +111,42 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
         viewModelScope.launch {
-            targets.observeAll().collect { list ->
-                _state.update { current ->
-                    // A target selected last session, or since deleted, must not stay selected.
-                    val stillThere = list.any { it.id == current.selectedTargetId }
-                    current.copy(
-                        savedTargets = list,
-                        selectedTargetId = if (stillThere) current.selectedTargetId else null,
+            profiles.observeAll().collect { rows ->
+                _state.update {
+                    it.copy(
+                        userProfiles = rows,
+                        availableProfiles = SourceProfiles.ALL + rows.map { row ->
+                            userProfile(row.id, row.name, row.lineRules, row.inlineRules, row.template)
+                        },
                     )
                 }
+            }
+        }
+        viewModelScope.launch {
+            appProfiles.observeAll().collect { rows ->
+                _state.update { it.copy(appMappings = rows.associate { row -> row.packageName to row.profileId }) }
+            }
+        }
+        viewModelScope.launch {
+            history.observeRecent().collect { rows -> _state.update { it.copy(history = rows) } }
+        }
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) { launchableApps(getApplication()) }.let { apps ->
+                _state.update { it.copy(installedApps = apps) }
+            }
+        }
+        viewModelScope.launch {
+            targets.observeAll().collect { list ->
+                _state.update { current ->
+                    // A target deleted since it was chosen, or chosen before the list
+                    // loaded, must not stay selected pointing at nothing.
+                    val wanted = pendingTargetId ?: current.selectedTargetId
+                    current.copy(
+                        savedTargets = list,
+                        selectedTargetId = wanted?.takeIf { id -> list.any { it.id == id } },
+                    )
+                }
+                ShareShortcuts.sync(getApplication(), list)
             }
         }
     }
@@ -106,21 +155,26 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
 
     fun onShare(share: IncomingShare?) {
         if (share == null || share.text.isBlank()) return
-        val detected = SourceProfiles.forPackage(share.sourcePackage)
         _state.update { current ->
             current.copy(
                 raw = share.text,
                 origin = "分享自 ${share.sourcePackage ?: "未知来源"}",
                 sourcePackage = share.sourcePackage,
-                // Nothing recognised the source, so fall back to the configured default.
-                profile = if (detected === SourceProfiles.GENERIC) {
-                    SourceProfiles.byId(current.settings.defaultProfileId)
-                } else {
-                    detected
-                },
+                profile = resolveProfile(current, share.sourcePackage),
                 payloadOverride = null,
             )
         }
+    }
+
+    /** An explicit app mapping wins; otherwise the app's own profile, then the default. */
+    private fun resolveProfile(state: ShareUiState, packageName: String?): SourceProfile {
+        state.appMappings[packageName]?.let { mapped ->
+            state.availableProfiles.firstOrNull { it.id == mapped }?.let { return it }
+        }
+        val detected = SourceProfiles.forPackage(packageName)
+        if (detected !== SourceProfiles.GENERIC) return detected
+        return state.availableProfiles.firstOrNull { it.id == state.settings.defaultProfileId }
+            ?: SourceProfiles.GENERIC
     }
 
     /**
@@ -133,22 +187,14 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
         _state.update {
-            it.copy(
-                raw = text,
-                origin = "剪贴板",
-                sourcePackage = null,
-                profile = it.profile,
-                payloadOverride = null,
-            )
+            it.copy(raw = text, origin = "剪贴板", sourcePackage = null, payloadOverride = null)
         }
     }
 
     /**
      * Opened directly rather than from a share — from the launcher or the quick settings
-     * tile. Adopting whatever is on the clipboard is what makes "copy, tap the tile" work.
-     *
-     * [force] is for the tile, which exists for exactly this. Otherwise it happens only if
-     * the user turned it on, and never over text already in hand.
+     * tile. [force] is for the tile, which exists for exactly this; otherwise it happens
+     * only if the user turned it on, and never over text already in hand.
      */
     fun adoptClipboardIfEnabled(force: Boolean = false) {
         viewModelScope.launch {
@@ -162,7 +208,12 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
     // ---- inputs ------------------------------------------------------------
 
     fun setProfile(profile: SourceProfile) = edit { it.copy(profile = profile) }
-    fun selectTarget(id: Long?) = edit { it.copy(selectedTargetId = id) }
+
+    /** Also used by a Direct Share shortcut, which arrives before the list is loaded. */
+    fun selectTarget(id: Long?) {
+        pendingTargetId = id
+        edit { it.copy(selectedTargetId = id) }
+    }
 
     fun editPayload(value: String) = _state.update { it.copy(payloadOverride = value) }
     fun regenerate() = _state.update { it.copy(payloadOverride = null) }
@@ -178,6 +229,7 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
     fun setAutoReadClipboard(value: Boolean) = settings { it.copy(autoReadClipboard = value) }
     fun setReturnToSource(value: Boolean) = settings { it.copy(returnToSource = value) }
     fun setCleanup(options: CleanupOptions) = settings { it.copy(cleanup = options) }
+    fun setDefaultProfileId(value: String) = settings { it.copy(defaultProfileId = value) }
 
     /** The path a new target would get, so the add form can show it while the name is typed. */
     fun previewPath(name: String): String =
@@ -185,6 +237,8 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
             _state.value.settings.pathTemplate,
             TemplateValues(text = "", title = name.trim(), date = LocalDate.now().toString()),
         ).trim()
+
+    // ---- targets -----------------------------------------------------------
 
     /**
      * Remembers a book (or any other destination) so the next share can be filed without
@@ -216,6 +270,7 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
                     year = year.trim(),
                 )
             )
+            pendingTargetId = id
             _state.update { it.copy(selectedTargetId = id) }
             if (createSkeleton) {
                 if (writeSkeleton(cleanName, resolvedPath, author.trim(), year.trim())) {
@@ -228,11 +283,93 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** For a target whose note does not exist yet: the heading has to be created first. */
     fun deleteTarget(target: TargetEntity) {
         viewModelScope.launch { targets.delete(target.id) }
+        if (pendingTargetId == target.id) pendingTargetId = null
         _state.update {
             if (it.selectedTargetId == target.id) it.copy(selectedTargetId = null) else it
+        }
+    }
+
+    // ---- user profiles -----------------------------------------------------
+
+    fun saveUserProfile(
+        rowId: Long?,
+        name: String,
+        lineRules: String,
+        inlineRules: String,
+        template: String,
+    ) {
+        if (name.isBlank()) {
+            _message.value = "给这个规则起个名字"
+            return
+        }
+        viewModelScope.launch {
+            val id = profiles.upsert(
+                ProfileEntity(
+                    id = rowId ?: 0,
+                    name = name.trim(),
+                    lineRules = lineRules,
+                    inlineRules = inlineRules,
+                    template = template.trim(),
+                )
+            )
+            // Keep the just-edited profile selected so its effect is visible immediately.
+            val assembled = SourceProfiles.ALL + profiles.observeAll().first().map { row ->
+                userProfile(row.id, row.name, row.lineRules, row.inlineRules, row.template)
+            }
+            _state.update { current ->
+                val edited = assembled.firstOrNull { it.id == userProfileId(id) }
+                current.copy(profile = edited ?: current.profile, payloadOverride = null)
+            }
+            _message.value = "已保存规则「$name」"
+        }
+    }
+
+    fun deleteUserProfile(row: ProfileEntity) {
+        viewModelScope.launch {
+            profiles.delete(row.id)
+            // Mappings pointing at it would resolve to nothing, so clear them with it.
+            _state.value.appMappings
+                .filterValues { it == userProfileId(row.id) }
+                .keys
+                .forEach { appProfiles.delete(it) }
+        }
+    }
+
+    // ---- per-app mapping ---------------------------------------------------
+
+    fun setAppMapping(packageName: String, profileId: String) {
+        viewModelScope.launch { appProfiles.upsert(AppProfileEntity(packageName, profileId)) }
+    }
+
+    fun clearAppMapping(packageName: String) {
+        viewModelScope.launch { appProfiles.delete(packageName) }
+    }
+
+    // ---- history -----------------------------------------------------------
+
+    fun resend(entry: HistoryEntity) {
+        val outcome = container.sender.send(
+            WriteRequest(
+                vault = _state.value.settings.vault,
+                filePath = entry.targetPath,
+                heading = entry.heading,
+                content = entry.payload,
+                mode = _state.value.settings.mode,
+            )
+        )
+        _message.value = when (outcome) {
+            is SendOutcome.Dispatched -> "已重发到 ${entry.targetPath}"
+            SendOutcome.NoObsidian -> "没找到 Obsidian"
+            is SendOutcome.Failed -> "重发失败：${outcome.message}"
+        }
+    }
+
+    fun clearHistory() {
+        viewModelScope.launch {
+            _state.value.history.forEach { history.delete(it.id) }
+            _message.value = "已清空发送历史"
         }
     }
 
@@ -349,6 +486,7 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
                 HistoryEntity(
                     createdAt = System.currentTimeMillis(),
                     targetPath = state.targetPath,
+                    heading = state.effectiveHeading,
                     payload = state.payload,
                     outcome = outcome::class.simpleName ?: "Unknown",
                     viaClipboard = (outcome as? SendOutcome.Dispatched)?.viaClipboard == true,
