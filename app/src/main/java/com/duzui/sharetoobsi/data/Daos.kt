@@ -8,6 +8,18 @@ import androidx.room.Query
 import kotlinx.coroutines.flow.Flow
 
 @Dao
+interface BookDao {
+    @Query("SELECT * FROM books ORDER BY sortOrder, id")
+    fun observeAll(): Flow<List<BookEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(book: BookEntity): Long
+
+    @Query("DELETE FROM books WHERE id = :id")
+    suspend fun delete(id: Long)
+}
+
+@Dao
 interface TargetDao {
     @Query("SELECT * FROM targets ORDER BY sortOrder, id")
     fun observeAll(): Flow<List<TargetEntity>>
@@ -20,9 +32,6 @@ interface TargetDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(target: TargetEntity): Long
-
-    @Query("UPDATE targets SET seeded = 1 WHERE id = :id")
-    suspend fun markSeeded(id: Long)
 
     @Query("DELETE FROM targets WHERE id = :id")
     suspend fun delete(id: Long)

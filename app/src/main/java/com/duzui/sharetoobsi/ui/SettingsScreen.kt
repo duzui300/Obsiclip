@@ -1,5 +1,6 @@
 package com.duzui.sharetoobsi.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,6 +13,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -30,12 +33,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.duzui.sharetoobsi.BookDraft
 import com.duzui.sharetoobsi.ShareUiState
 import com.duzui.sharetoobsi.TargetDraft
+import com.duzui.sharetoobsi.data.BookEntity
 import com.duzui.sharetoobsi.data.FormatEntity
 import com.duzui.sharetoobsi.data.ProfileEntity
 import com.duzui.sharetoobsi.data.TargetEntity
@@ -65,24 +71,42 @@ fun SettingsScreen(
     onClearAppMapping: (String) -> Unit,
     onSaveTarget: (TargetDraft) -> Unit,
     onMoveTarget: (Int, Int) -> Unit,
+    onDeleteTarget: (TargetEntity) -> Unit,
+    onDefaultTargetId: (Long?) -> Unit,
     onSaveFormat: (Long?, String, String) -> Unit,
     onDeleteFormat: (FormatEntity) -> Unit,
-    onDerivePath: (String) -> String,
-    onDeleteTarget: (TargetEntity) -> Unit,
+    onSaveBook: (BookDraft) -> Unit,
+    onMoveBook: (Int, Int) -> Unit,
+    onDeleteBook: (BookEntity) -> Unit,
+    onDeriveSkeletonPath: (String) -> String,
     onOpenHistory: () -> Unit,
     onRetryOutbox: () -> Unit,
 ) {
     val settings = state.settings
-    var addingTarget by remember { mutableStateOf(false) }
+
     var editingTarget by remember { mutableStateOf<TargetEntity?>(null) }
+    var addingTarget by remember { mutableStateOf(false) }
+    var editingBook by remember { mutableStateOf<BookEntity?>(null) }
+    var addingBook by remember { mutableStateOf(false) }
     var profileMenu by remember { mutableStateOf(false) }
+    var defaultTargetMenu by remember { mutableStateOf(false) }
+
+    // Which sections are shut. Kept as a list of titles so it survives a rotation.
+    var collapsed by rememberSaveable { mutableStateOf(arrayListOf<String>()) }
+    fun toggle(title: String) {
+        collapsed = if (title in collapsed) {
+            ArrayList(collapsed.filterNot { it == title })
+        } else {
+            ArrayList(collapsed + title)
+        }
+    }
 
     if (addingTarget || editingTarget != null) {
         AddTargetDialog(
             existing = editingTarget,
+            defaultPath = settings.pathTemplate,
             defaultHeading = settings.heading,
             formats = state.formats,
-            derivePath = onDerivePath,
             onDismiss = {
                 addingTarget = false
                 editingTarget = null
@@ -91,6 +115,21 @@ fun SettingsScreen(
                 onSaveTarget(draft)
                 addingTarget = false
                 editingTarget = null
+            },
+        )
+    }
+    if (addingBook || editingBook != null) {
+        AddBookDialog(
+            existing = editingBook,
+            deriveSkeletonPath = onDeriveSkeletonPath,
+            onDismiss = {
+                addingBook = false
+                editingBook = null
+            },
+            onSave = { draft ->
+                onSaveBook(draft)
+                addingBook = false
+                editingBook = null
             },
         )
     }
@@ -104,6 +143,13 @@ fun SettingsScreen(
                         Icon(Icons.Filled.ArrowBack, contentDescription = "返回")
                     }
                 },
+                actions = {
+                    Text(
+                        if (collapsed.isEmpty()) "全部展开" else "点标题可折叠",
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.padding(end = 12.dp),
+                    )
+                },
             )
         },
     ) { insets ->
@@ -112,171 +158,292 @@ fun SettingsScreen(
                 .fillMaxSize()
                 .padding(insets)
                 .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Section("写入目标")
-            Field("Vault 名称", settings.vault, onVault)
-            Field("小节标题", settings.heading, onHeading, "留空则追加到文件末尾")
-            Field("书目路径模板", settings.pathTemplate, onPathTemplate, "可用 {title} {author} {year} {date}")
+            Section("目的地", collapsed, ::toggle) {
+                Text(
+                    "写到哪、写到哪个小节、用哪种格式。路径可以用 {title} {author} {year}，" +
+                        "由选中的书填写 —— 所以一条「书目笔记」就够所有书用。",
+                    style = MaterialTheme.typography.bodySmall,
+                )
 
-            Section("输出格式")
-            Field(
-                "默认格式模板",
-                settings.template,
-                onTemplate,
-                "占位符：" + Template.placeholders.joinToString(" ") { "{$it}" },
-                singleLine = false,
-            )
-            Field("标签", settings.tags, onTags)
-            FormatsSection(
-                formats = state.formats,
-                onSave = onSaveFormat,
-                onDelete = onDeleteFormat,
-            )
-
-            Section("写入方式")
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = { onMode(WriteMode.ADVANCED) }) {
-                    Text(if (settings.mode == WriteMode.ADVANCED) "● Advanced URI" else "○ Advanced URI")
-                }
-                OutlinedButton(onClick = { onMode(WriteMode.OFFICIAL) }) {
-                    Text(if (settings.mode == WriteMode.OFFICIAL) "● 官方 URI" else "○ 官方 URI")
-                }
-            }
-            Text(
-                if (settings.mode == WriteMode.ADVANCED) {
-                    "能定位到指定小节，需要装 Advanced URI 插件。"
-                } else {
-                    "不需要插件，但只能追加到文件末尾，无法指定小节。"
-                },
-                style = MaterialTheme.typography.bodySmall,
-            )
-            Toggle("静默写入（不跳到 Obsidian）", settings.silent, onSilent)
-            Toggle("打开 App 时自动读取剪贴板", settings.autoReadClipboard, onAutoReadClipboard)
-            Text(
-                "只在从桌面或磁贴打开时生效；由分享进入时不受影响。快捷设置磁贴始终读取剪贴板。",
-                style = MaterialTheme.typography.bodySmall,
-            )
-            Toggle("写入后返回来源 App", settings.returnToSource, onReturnToSource)
-
-            Section("清洗流水线")
-            val cleanup = settings.cleanup
-            Toggle("归一化换行与不可见字符", cleanup.normalize) { onCleanup(cleanup.copy(normalize = it)) }
-            Toggle("按来源规则去杂质", cleanup.stripBoilerplate) { onCleanup(cleanup.copy(stripBoilerplate = it)) }
-            Toggle("删除只有链接的行", cleanup.stripLoneUrlLines) { onCleanup(cleanup.copy(stripLoneUrlLines = it)) }
-            Toggle("删除「说明文字＋链接」的尾行", cleanup.dropLinkFooterLines) {
-                onCleanup(cleanup.copy(dropLinkFooterLines = it))
-            }
-            Toggle("合并被硬换行截断的句子", cleanup.unwrapLines) { onCleanup(cleanup.copy(unwrapLines = it)) }
-            Toggle("压缩连续空行", cleanup.collapseBlankLines) { onCleanup(cleanup.copy(collapseBlankLines = it)) }
-            Toggle("包成引用块", cleanup.wrapQuote) { onCleanup(cleanup.copy(wrapQuote = it)) }
-            Toggle("包成 ==高亮==（在引用块内）", cleanup.wrapHighlight) { onCleanup(cleanup.copy(wrapHighlight = it)) }
-
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("默认规则", modifier = Modifier.weight(1f))
-                OutlinedButton(onClick = { profileMenu = true }) {
-                    Text(state.availableProfiles.firstOrNull { it.id == settings.defaultProfileId }?.label ?: "通用")
-                }
-                DropdownMenu(expanded = profileMenu, onDismissRequest = { profileMenu = false }) {
-                    state.availableProfiles.forEach { profile ->
-                        DropdownMenuItem(
-                            text = { Text(profile.label) },
-                            onClick = {
-                                onDefaultProfileId(profile.id)
-                                profileMenu = false
-                            },
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("默认收件箱", modifier = Modifier.weight(1f))
+                    OutlinedButton(onClick = { defaultTargetMenu = true }) {
+                        Text(
+                            state.savedTargets.firstOrNull { it.id == settings.defaultTargetId }?.name
+                                ?: "第一个目标"
                         )
                     }
+                    DropdownMenu(
+                        expanded = defaultTargetMenu,
+                        onDismissRequest = { defaultTargetMenu = false },
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("第一个目标") },
+                            onClick = {
+                                onDefaultTargetId(null)
+                                defaultTargetMenu = false
+                            },
+                        )
+                        state.savedTargets.forEach { target ->
+                            DropdownMenuItem(
+                                text = { Text(target.name) },
+                                onClick = {
+                                    onDefaultTargetId(target.id)
+                                    defaultTargetMenu = false
+                                },
+                            )
+                        }
+                    }
+                }
+
+                Button(onClick = { addingTarget = true }) { Text("添加目的地") }
+                if (state.savedTargets.size > 1) {
+                    Text("长按拖动排序，和分享界面芯片的顺序一致。", style = MaterialTheme.typography.bodySmall)
+                }
+
+                val targetReorder = rememberReorderState(state.savedTargets.map { it.id })
+                state.savedTargets.forEachIndexed { index, target ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.reorderDrag(
+                            key = target.id,
+                            index = index,
+                            state = targetReorder,
+                            horizontal = false,
+                            onMove = onMoveTarget,
+                        ),
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(target.name, style = MaterialTheme.typography.bodyMedium)
+                            Text(
+                                buildString {
+                                    append(target.path)
+                                    if (target.heading.isBlank()) {
+                                        append("（文件末尾）")
+                                    } else {
+                                        append(" › ").append(target.heading)
+                                    }
+                                    state.formats.firstOrNull { it.id == target.formatId }?.let {
+                                        append("　· ").append(it.name)
+                                    }
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                        IconButton(onClick = { editingTarget = target }) {
+                            Icon(Icons.Filled.Edit, contentDescription = "编辑")
+                        }
+                        IconButton(onClick = { onDeleteTarget(target) }) {
+                            Icon(Icons.Filled.Delete, contentDescription = "删除")
+                        }
+                    }
+                    HorizontalDivider()
                 }
             }
-            Text("认不出来源的分享用这套规则。", style = MaterialTheme.typography.bodySmall)
 
-            Section("自定义规则")
-            RulesSection(
-                userProfiles = state.userProfiles,
-                placeholderTemplate = settings.template,
-                onSave = onSaveProfile,
-                onDelete = onDeleteProfile,
-            )
-
-            Section("按 App 指定规则")
-            AppProfileSection(
-                installedApps = state.installedApps,
-                mappings = state.appMappings,
-                availableProfiles = state.availableProfiles,
-                onSet = onSetAppMapping,
-                onClear = onClearAppMapping,
-            )
-
-            Section("预设目标")
-            Text(
-                "把正在读的几本书加进来，分享时点一下芯片就能选，不用每次打字。",
-                style = MaterialTheme.typography.bodySmall,
-            )
-            Button(onClick = { addingTarget = true }) { Text("添加目标") }
-            if (state.savedTargets.size > 1) {
+            Section("书籍", collapsed, ::toggle) {
                 Text(
-                    "长按拖动排序。顺序和分享界面的芯片左右一致。",
+                    "在读什么。只提供书名、作者、年份这些信息，不决定写到哪。",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Button(onClick = { addingBook = true }) { Text("添加书籍") }
+                if (state.savedBooks.size > 1) {
+                    Text("长按拖动排序，和分享界面芯片的顺序一致。", style = MaterialTheme.typography.bodySmall)
+                }
+
+                val bookReorder = rememberReorderState(state.savedBooks.map { it.id })
+                state.savedBooks.forEachIndexed { index, book ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.reorderDrag(
+                            key = book.id,
+                            index = index,
+                            state = bookReorder,
+                            horizontal = false,
+                            onMove = onMoveBook,
+                        ),
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(book.title, style = MaterialTheme.typography.bodyMedium)
+                            Text(
+                                listOfNotNull(
+                                    book.author.takeIf { it.isNotBlank() },
+                                    book.year.takeIf { it.isNotBlank() },
+                                ).joinToString(" · ").ifBlank { "（没有作者和年份）" },
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                        IconButton(onClick = { editingBook = book }) {
+                            Icon(Icons.Filled.Edit, contentDescription = "编辑")
+                        }
+                        IconButton(onClick = { onDeleteBook(book) }) {
+                            Icon(Icons.Filled.Delete, contentDescription = "删除")
+                        }
+                    }
+                    HorizontalDivider()
+                }
+            }
+
+            Section("输出格式", collapsed, ::toggle) {
+                Field(
+                    "默认格式模板",
+                    settings.template,
+                    onTemplate,
+                    "占位符：" + Template.placeholders.joinToString(" ") { "{$it}" },
+                    singleLine = false,
+                )
+                Field("标签", settings.tags, onTags)
+                FormatsSection(
+                    formats = state.formats,
+                    onSave = onSaveFormat,
+                    onDelete = onDeleteFormat,
+                )
+            }
+
+            Section("写入方式", collapsed, ::toggle) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = { onMode(WriteMode.ADVANCED) }) {
+                        Text(if (settings.mode == WriteMode.ADVANCED) "● Advanced URI" else "○ Advanced URI")
+                    }
+                    OutlinedButton(onClick = { onMode(WriteMode.OFFICIAL) }) {
+                        Text(if (settings.mode == WriteMode.OFFICIAL) "● 官方 URI" else "○ 官方 URI")
+                    }
+                }
+                Text(
+                    if (settings.mode == WriteMode.ADVANCED) {
+                        "能定位到指定小节，需要装 Advanced URI 插件。"
+                    } else {
+                        "不需要插件，但只能追加到文件末尾，无法指定小节。"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Toggle("静默写入", settings.silent, onSilent)
+                Text(
+                    "Obsidian 一定会被拉到前台 —— URI 只能由它自己处理。所以「静默」实际做的是：" +
+                        "不打开那篇笔记，处理完立刻把控制权交还回来。",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Toggle("写入后返回来源 App", settings.returnToSource, onReturnToSource)
+                Text(
+                    "开了这个，控制权交给来源 App 而不是本 App。两个都开就是回到你分享的地方。",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Toggle("打开 App 时自动读取剪贴板", settings.autoReadClipboard, onAutoReadClipboard)
+                Text(
+                    "从桌面或磁贴打开时覆盖当前内容；由分享进入时不受影响。",
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
-            state.savedTargets.forEachIndexed { index, target ->
-                val drag = rememberDragReorder(
-                    index = index,
-                    itemCount = state.savedTargets.size,
-                    horizontal = false,
-                    onMove = onMoveTarget,
+
+            Section("写入目标", collapsed, ::toggle) {
+                Field("Vault 名称", settings.vault, onVault)
+                Field("默认小节标题", settings.heading, onHeading, "添加目的地时的默认值")
+                Field(
+                    "新目的地的默认路径",
+                    settings.pathTemplate,
+                    onPathTemplate,
+                    "可用 {title} {author} {year} {date}",
                 )
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = drag) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(target.name, style = MaterialTheme.typography.bodyMedium)
-                        Text(
-                            buildString {
-                                append(target.path)
-                                if (target.heading.isBlank()) {
-                                    append("（文件末尾）")
-                                } else {
-                                    append(" › ").append(target.heading)
-                                }
-                                val by = listOf(target.author, target.year).filter { it.isNotBlank() }
-                                if (by.isNotEmpty()) append("　— ").append(by.joinToString(" "))
-                                state.formats.firstOrNull { it.id == target.formatId }?.let {
-                                    append("　· 格式：").append(it.name)
-                                }
-                                if (!target.seeded) append("　· 未建骨架")
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                    }
-                    IconButton(onClick = { editingTarget = target }) {
-                        Icon(Icons.Filled.Edit, contentDescription = "编辑")
-                    }
-                    IconButton(onClick = { onDeleteTarget(target) }) {
-                        Icon(Icons.Filled.Delete, contentDescription = "删除")
-                    }
-                }
-                HorizontalDivider()
             }
 
-            Section("记录")
-            OutlinedButton(onClick = onOpenHistory, modifier = Modifier.fillMaxWidth()) {
-                Text("发送历史（${state.history.size} 条）")
+            Section("清洗流水线", collapsed, ::toggle) {
+                val cleanup = settings.cleanup
+                Toggle("归一化换行与不可见字符", cleanup.normalize) { onCleanup(cleanup.copy(normalize = it)) }
+                Toggle("按来源规则去杂质", cleanup.stripBoilerplate) { onCleanup(cleanup.copy(stripBoilerplate = it)) }
+                Toggle("删除只有链接的行", cleanup.stripLoneUrlLines) { onCleanup(cleanup.copy(stripLoneUrlLines = it)) }
+                Toggle("删除「说明文字＋链接」的尾行", cleanup.dropLinkFooterLines) {
+                    onCleanup(cleanup.copy(dropLinkFooterLines = it))
+                }
+                Toggle("合并被硬换行截断的句子", cleanup.unwrapLines) { onCleanup(cleanup.copy(unwrapLines = it)) }
+                Toggle("压缩连续空行", cleanup.collapseBlankLines) { onCleanup(cleanup.copy(collapseBlankLines = it)) }
+                Toggle("包成引用块", cleanup.wrapQuote) { onCleanup(cleanup.copy(wrapQuote = it)) }
+                Toggle("包成 ==高亮==（在引用块内）", cleanup.wrapHighlight) { onCleanup(cleanup.copy(wrapHighlight = it)) }
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("默认规则", modifier = Modifier.weight(1f))
+                    OutlinedButton(onClick = { profileMenu = true }) {
+                        Text(
+                            state.availableProfiles.firstOrNull { it.id == settings.defaultProfileId }?.label
+                                ?: "通用"
+                        )
+                    }
+                    DropdownMenu(expanded = profileMenu, onDismissRequest = { profileMenu = false }) {
+                        state.availableProfiles.forEach { profile ->
+                            DropdownMenuItem(
+                                text = { Text(profile.label) },
+                                onClick = {
+                                    onDefaultProfileId(profile.id)
+                                    profileMenu = false
+                                },
+                            )
+                        }
+                    }
+                }
+                Text("认不出来源的分享用这套规则。", style = MaterialTheme.typography.bodySmall)
             }
-            Text(
-                "发送失败的条目会进待发队列。为避免打扰，只在你打开本 App 时重发 —— " +
-                    "Android 不允许后台启动 Obsidian。",
-                style = MaterialTheme.typography.bodySmall,
-            )
-            Button(onClick = onRetryOutbox) { Text("立即重发待发队列") }
+
+            Section("自定义规则", collapsed, ::toggle) {
+                RulesSection(
+                    userProfiles = state.userProfiles,
+                    placeholderTemplate = settings.template,
+                    onSave = onSaveProfile,
+                    onDelete = onDeleteProfile,
+                )
+            }
+
+            Section("按 App 指定规则", collapsed, ::toggle) {
+                AppProfileSection(
+                    installedApps = state.installedApps,
+                    mappings = state.appMappings,
+                    availableProfiles = state.availableProfiles,
+                    onSet = onSetAppMapping,
+                    onClear = onClearAppMapping,
+                )
+            }
+
+            Section("记录", collapsed, ::toggle) {
+                OutlinedButton(onClick = onOpenHistory, modifier = Modifier.fillMaxWidth()) {
+                    Text("发送历史（${state.history.size} 条）")
+                }
+                Text(
+                    "发送失败的条目会进待发队列。为避免打扰，只在你打开本 App 时重发 —— " +
+                        "Android 不允许后台启动 Obsidian。",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Button(onClick = onRetryOutbox) { Text("立即重发待发队列") }
+            }
         }
     }
 }
 
+/** A section whose body hides behind its title, so a long screen stays scannable. */
 @Composable
-private fun Section(title: String) {
+private fun Section(
+    title: String,
+    collapsed: List<String>,
+    onToggle: (String) -> Unit,
+    content: @Composable () -> Unit,
+) {
     HorizontalDivider()
-    Text(title, style = MaterialTheme.typography.titleMedium)
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onToggle(title) }
+            .padding(vertical = 8.dp),
+    ) {
+        Text(title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+        Icon(
+            imageVector = if (title in collapsed) Icons.Filled.KeyboardArrowDown else Icons.Filled.KeyboardArrowUp,
+            contentDescription = if (title in collapsed) "展开" else "收起",
+        )
+    }
+    if (title !in collapsed) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) { content() }
+    }
 }
 
 @Composable

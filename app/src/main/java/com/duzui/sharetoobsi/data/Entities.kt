@@ -10,21 +10,38 @@ import androidx.room.PrimaryKey
  * and year live here rather than in a separate table: they exist to fill the `{author}`
  * and `{year}` placeholders of that book's quotes, and nothing else.
  */
+/**
+ * Where a capture goes, and how it is shaped on arrival. Deliberately knows nothing about
+ * *what* is being read: one target — `30-Reading/Book/{title}.md` under
+ * `## Quotes worth keeping` — serves every book.
+ *
+ * [path] is a template, filled from the book chosen alongside it, which is what makes the
+ * pairing work without a target per book.
+ */
 @Entity(tableName = "targets")
 data class TargetEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    /** Doubles as `{title}` in the path template and in the attribution line. */
+    /** A label for the chip. Defaults to the file's own name when left blank. */
     val name: String,
     val path: String,
     /** Blank means "append to the end of the file", the only safe option without a heading. */
     val heading: String = "",
-    val author: String = "",
-    val year: String = "",
-    /** Set once a Book skeleton has been written, so it is never written twice. */
-    val seeded: Boolean = false,
     /** A named output format; null uses the default one. */
     val formatId: Long? = null,
     /** Position in the chip row, which is also the order in settings. */
+    val sortOrder: Int = 0,
+)
+
+/**
+ * What is being read. Pure metadata: it fills `{title}`, `{author}` and `{year}` and
+ * decides nothing about where the words end up.
+ */
+@Entity(tableName = "books")
+data class BookEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val title: String,
+    val author: String = "",
+    val year: String = "",
     val sortOrder: Int = 0,
 )
 

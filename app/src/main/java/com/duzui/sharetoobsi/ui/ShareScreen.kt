@@ -40,6 +40,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import com.duzui.sharetoobsi.BookDraft
 import com.duzui.sharetoobsi.ShareUiState
 import com.duzui.sharetoobsi.TargetDraft
 import com.duzui.sharetoobsi.domain.SourceProfile
@@ -55,7 +56,10 @@ fun ShareScreen(
     onSelectTarget: (Long?) -> Unit,
     onMoveTarget: (Int, Int) -> Unit,
     onSaveTarget: (TargetDraft) -> Unit,
-    onDerivePath: (String) -> String,
+    onSelectBook: (Long?) -> Unit,
+    onMoveBook: (Int, Int) -> Unit,
+    onSaveBook: (BookDraft) -> Unit,
+    onDeriveSkeletonPath: (String) -> String,
     onReadClipboard: () -> Unit,
     onPayloadEdit: (String) -> Unit,
     onRegenerate: () -> Unit,
@@ -65,6 +69,7 @@ fun ShareScreen(
 ) {
     val snackbar = remember { SnackbarHostState() }
     var addingTarget by remember { mutableStateOf(false) }
+    var addingBook by remember { mutableStateOf(false) }
 
     LaunchedEffect(message) {
         if (message != null) {
@@ -76,13 +81,24 @@ fun ShareScreen(
     if (addingTarget) {
         AddTargetDialog(
             existing = null,
+            defaultPath = state.settings.pathTemplate,
             defaultHeading = state.settings.heading,
             formats = state.formats,
-            derivePath = onDerivePath,
             onDismiss = { addingTarget = false },
             onSave = { draft ->
                 onSaveTarget(draft)
                 addingTarget = false
+            },
+        )
+    }
+    if (addingBook) {
+        AddBookDialog(
+            existing = null,
+            deriveSkeletonPath = onDeriveSkeletonPath,
+            onDismiss = { addingBook = false },
+            onSave = { draft ->
+                onSaveBook(draft)
+                addingBook = false
             },
         )
     }
@@ -119,11 +135,18 @@ fun ShareScreen(
                 Text("写入 Obsidian", style = MaterialTheme.typography.titleMedium)
             }
 
-            TargetSection(
+            DestinationSection(
                 state = state,
-                onSelectTarget = onSelectTarget,
-                onMoveTarget = onMoveTarget,
-                onAddTarget = { addingTarget = true },
+                onSelect = onSelectTarget,
+                onMove = onMoveTarget,
+                onAdd = { addingTarget = true },
+            )
+
+            BookSection(
+                state = state,
+                onSelect = onSelectBook,
+                onMove = onMoveBook,
+                onAdd = { addingBook = true },
             )
 
             if (state.raw.isBlank()) {
@@ -133,6 +156,114 @@ fun ShareScreen(
             }
 
             SourcePicker(state, onProfileChange)
+        }
+    }
+}
+
+@Composable
+private fun DestinationSection(
+    state: ShareUiState,
+    onSelect: (Long?) -> Unit,
+    onMove: (Int, Int) -> Unit,
+    onAdd: () -> Unit,
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text("写到哪", style = MaterialTheme.typography.labelMedium)
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                val reorder = rememberReorderState(state.savedTargets.map { it.id })
+
+                state.savedTargets.forEachIndexed { index, target ->
+                    FilterChip(
+                        selected = state.chosenTarget?.id == target.id,
+                        onClick = { onSelect(target.id) },
+                        label = { Text(target.name) },
+                        modifier = Modifier.reorderDrag(
+                            key = target.id,
+                            index = index,
+                            state = reorder,
+                            horizontal = true,
+                            onMove = onMove,
+                        ),
+                    )
+                }
+                FilterChip(
+                    selected = false,
+                    onClick = onAdd,
+                    label = { Text("＋") },
+                )
+            }
+            Text(state.targetPath, style = MaterialTheme.typography.bodyMedium)
+            Text(
+                when {
+                    state.settings.mode == WriteMode.OFFICIAL ->
+                        "追加到文件末尾 —— 官方 URI 无法指定小节"
+                    state.effectiveHeading != null -> "追加到小节：${state.effectiveHeading}"
+                    else -> "追加到文件末尾"
+                },
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+    }
+}
+
+@Composable
+private fun BookSection(
+    state: ShareUiState,
+    onSelect: (Long?) -> Unit,
+    onMove: (Int, Int) -> Unit,
+    onAdd: () -> Unit,
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text("在读哪本", style = MaterialTheme.typography.labelMedium)
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                val reorder = rememberReorderState(state.savedBooks.map { it.id })
+
+                state.savedBooks.forEachIndexed { index, book ->
+                    FilterChip(
+                        selected = state.chosenBook?.id == book.id,
+                        onClick = { onSelect(book.id) },
+                        label = { Text(book.title) },
+                        modifier = Modifier.reorderDrag(
+                            key = book.id,
+                            index = index,
+                            state = reorder,
+                            horizontal = true,
+                            onMove = onMove,
+                        ),
+                    )
+                }
+                FilterChip(
+                    selected = false,
+                    onClick = onAdd,
+                    label = { Text("＋") },
+                )
+            }
+            val book = state.chosenBook
+            Text(
+                if (book == null) {
+                    "还没有书。加一本之后，出处行和路径里的 {title} 才能填上。"
+                } else {
+                    listOfNotNull(
+                        book.author.takeIf { it.isNotBlank() },
+                        book.year.takeIf { it.isNotBlank() },
+                    ).joinToString(" · ").ifBlank { "（没有作者和年份）" }
+                },
+                style = MaterialTheme.typography.bodySmall,
+            )
         }
     }
 }
@@ -156,63 +287,6 @@ private fun EmptyState(origin: String, onReadClipboard: () -> Unit) {
             OutlinedButton(onClick = onReadClipboard, modifier = Modifier.fillMaxWidth()) {
                 Text("从剪贴板读取")
             }
-        }
-    }
-}
-
-@Composable
-private fun TargetSection(
-    state: ShareUiState,
-    onSelectTarget: (Long?) -> Unit,
-    onMoveTarget: (Int, Int) -> Unit,
-    onAddTarget: () -> Unit,
-) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Row(
-                modifier = Modifier.horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                state.savedTargets.forEachIndexed { index, target ->
-                    // Long-press a chip and drag sideways to reorder. The same order shows
-                    // top-to-bottom in settings, because both read one column.
-                    val drag = rememberDragReorder(
-                        index = index,
-                        itemCount = state.savedTargets.size,
-                        horizontal = true,
-                        onMove = onMoveTarget,
-                    )
-                    FilterChip(
-                        selected = state.chosenTarget?.id == target.id,
-                        onClick = { onSelectTarget(target.id) },
-                        label = { Text(target.name) },
-                        modifier = drag,
-                    )
-                }
-                FilterChip(
-                    selected = false,
-                    onClick = onAddTarget,
-                    label = { Text("＋ 书目") },
-                )
-            }
-
-            Text(state.targetPath, style = MaterialTheme.typography.bodyMedium)
-            Text(
-                when {
-                    state.settings.mode == WriteMode.OFFICIAL ->
-                        "追加到文件末尾 —— 官方 URI 无法指定小节"
-                    state.effectiveHeading != null -> "追加到小节：${state.effectiveHeading}"
-                    else -> "追加到文件末尾"
-                },
-                style = MaterialTheme.typography.bodySmall,
-            )
-            Text(
-                "长按芯片可以拖动排序",
-                style = MaterialTheme.typography.bodySmall,
-            )
         }
     }
 }

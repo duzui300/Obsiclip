@@ -12,7 +12,6 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -28,35 +27,26 @@ import com.duzui.sharetoobsi.data.FormatEntity
 import com.duzui.sharetoobsi.data.TargetEntity
 
 /**
- * Adds or edits a target — a book, the inbox, or any other destination.
+ * Adds or edits a destination: where a capture goes, how it is shaped, and nothing else.
  *
- * Typing the book once here is what replaces guessing it out of the share text: a wrong
- * guess files a highlight into a brand new note, and the note it should have gone to is
- * usually sitting right there already.
+ * What is being read is a separate axis — see [AddBookDialog] — which is what lets one
+ * target serve every book instead of needing a row per title.
  */
 @Composable
 fun AddTargetDialog(
     existing: TargetEntity?,
+    defaultPath: String,
     defaultHeading: String,
     formats: List<FormatEntity>,
-    derivePath: (String) -> String,
     onDismiss: () -> Unit,
     onSave: (TargetDraft) -> Unit,
 ) {
     var name by remember { mutableStateOf(existing?.name.orEmpty()) }
-    var author by remember { mutableStateOf(existing?.author.orEmpty()) }
-    var year by remember { mutableStateOf(existing?.year.orEmpty()) }
+    var path by remember { mutableStateOf(existing?.path ?: defaultPath) }
     var heading by remember { mutableStateOf(existing?.heading ?: defaultHeading) }
     var formatId by remember { mutableStateOf(existing?.formatId) }
-    var createSkeleton by remember { mutableStateOf(false) }
-
-    // The path follows the name until the user overrules it; an existing target is
-    // overruling it already.
-    var pathEdited by remember { mutableStateOf(existing != null) }
-    var pathOverride by remember { mutableStateOf(existing?.path.orEmpty()) }
-    val path = if (pathEdited) pathOverride else derivePath(name)
-
     var formatMenu by remember { mutableStateOf(false) }
+
     val formatLabel = formats.firstOrNull { it.id == formatId }?.name ?: "默认格式"
 
     AlertDialog(
@@ -70,48 +60,32 @@ fun AddTargetDialog(
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("书名 / 名称") },
+                    label = { Text("名称") },
+                    supportingText = { Text("只是芯片上显示的名字") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = author,
-                        onValueChange = { author = it },
-                        label = { Text("作者") },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                    )
-                    OutlinedTextField(
-                        value = year,
-                        onValueChange = { year = it },
-                        label = { Text("年份") },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
                 OutlinedTextField(
                     value = path,
-                    onValueChange = {
-                        pathEdited = true
-                        pathOverride = it
-                    },
+                    onValueChange = { path = it },
                     label = { Text("笔记路径") },
-                    supportingText = { Text("按设置里的路径模板生成，可改") },
-                    singleLine = true,
+                    supportingText = {
+                        Text("可用 {title} {author} {year} {date}，由选中的书填写")
+                    },
+                    minLines = 2,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 OutlinedTextField(
                     value = heading,
                     onValueChange = { heading = it },
-                    label = { Text("小节标题") },
+                    label = { Text("插入到哪个小节") },
                     supportingText = { Text("留空则追加到文件末尾") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("输出格式", modifier = Modifier.weight(1f))
+                    Text("默认输出格式", modifier = Modifier.weight(1f))
                     OutlinedButton(onClick = { formatMenu = true }) { Text(formatLabel) }
                     DropdownMenu(expanded = formatMenu, onDismissRequest = { formatMenu = false }) {
                         DropdownMenuItem(
@@ -138,20 +112,6 @@ fun AddTargetDialog(
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
-
-                // Only worth offering while the note may not exist yet.
-                if (existing?.seeded != true) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("同时创建笔记骨架", style = MaterialTheme.typography.bodyMedium)
-                            Text(
-                                "笔记还不存在时勾选。已存在的笔记勾了会重复写入 frontmatter。",
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                        }
-                        Switch(checked = createSkeleton, onCheckedChange = { createSkeleton = it })
-                    }
-                }
             }
         },
         confirmButton = {
@@ -161,16 +121,13 @@ fun AddTargetDialog(
                         TargetDraft(
                             rowId = existing?.id,
                             name = name,
-                            author = author,
-                            year = year,
                             path = path,
                             heading = heading,
                             formatId = formatId,
-                            createSkeleton = createSkeleton,
                         )
                     )
                 },
-                enabled = name.isNotBlank(),
+                enabled = name.isNotBlank() && path.isNotBlank(),
             ) { Text("保存") }
         },
         dismissButton = {

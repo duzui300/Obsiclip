@@ -28,6 +28,21 @@ object Defaults {
      */
     const val TEMPLATE = "{text}\n\n> — {author}《{title}》{year} {tags}"
 
+    /**
+     * Starter output formats, offered once on first run.
+     *
+     * Ordinary rows afterwards — editable and deletable — so treat this as a starting
+     * point rather than a fixture.
+     */
+    val PRESET_FORMATS: List<Pair<String, String>> = listOf(
+        "引用块" to "{text}\n\n> — {author}《{title}》{year} {tags}",
+        "纯摘录" to "{text}",
+        "摘录 + 出处" to "{text}\n\n— {author}《{title}》{year} {tags}",
+        "高亮标注" to "> =={text}==\n>\n> — {author}《{title}》{tags}",
+        "带日期" to "{text}\n\n> — {author}《{title}》{year} · {date} {tags}",
+        "小节标题 + 摘录" to "### {title}\n\n{text}\n\n> — {author} {year} {tags}",
+    )
+
     /** The book-note skeleton, mirroring `Templates/Book.md` in the vault. */
     fun bookSkeleton(title: String, author: String?, year: String?, date: String): String {
         val authorLine = listOfNotNull(author?.takeIf { it.isNotBlank() }, year?.takeIf { it.isNotBlank() })

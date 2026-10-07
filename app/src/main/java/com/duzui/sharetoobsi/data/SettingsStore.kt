@@ -2,6 +2,7 @@ package com.duzui.sharetoobsi.data
 
 import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -39,6 +40,13 @@ data class AppSettings(
      * missing: the user is free to delete or rename it like any other target.
      */
     val defaultTargetSeeded: Boolean = false,
+    /**
+     * Which target a capture lands in when nothing else is chosen. Null means the first
+     * one in the chip order, which is what most people want anyway.
+     */
+    val defaultTargetId: Long? = null,
+    /** The starter output formats are offered once, then belong to the user. */
+    val presetFormatsSeeded: Boolean = false,
     val cleanup: CleanupOptions = CleanupOptions(),
 )
 
@@ -58,6 +66,8 @@ class SettingsStore(private val context: Context) {
         val returnToSource = booleanPreferencesKey("returnToSource")
         val defaultProfileId = stringPreferencesKey("defaultProfileId")
         val defaultTargetSeeded = booleanPreferencesKey("defaultTargetSeeded")
+        val defaultTargetId = longPreferencesKey("defaultTargetId")
+        val presetFormatsSeeded = booleanPreferencesKey("presetFormatsSeeded")
 
         val normalize = booleanPreferencesKey("cleanup.normalize")
         val stripBoilerplate = booleanPreferencesKey("cleanup.stripBoilerplate")
@@ -86,6 +96,8 @@ class SettingsStore(private val context: Context) {
             returnToSource = prefs[Keys.returnToSource] ?: defaults.returnToSource,
             defaultProfileId = prefs[Keys.defaultProfileId] ?: defaults.defaultProfileId,
             defaultTargetSeeded = prefs[Keys.defaultTargetSeeded] ?: defaults.defaultTargetSeeded,
+            defaultTargetId = prefs[Keys.defaultTargetId],
+            presetFormatsSeeded = prefs[Keys.presetFormatsSeeded] ?: defaults.presetFormatsSeeded,
             cleanup = CleanupOptions(
                 normalize = prefs[Keys.normalize] ?: base.normalize,
                 stripBoilerplate = prefs[Keys.stripBoilerplate] ?: base.stripBoilerplate,
@@ -113,6 +125,12 @@ class SettingsStore(private val context: Context) {
             prefs[Keys.returnToSource] = next.returnToSource
             prefs[Keys.defaultProfileId] = next.defaultProfileId
             prefs[Keys.defaultTargetSeeded] = next.defaultTargetSeeded
+            if (next.defaultTargetId == null) {
+                prefs.remove(Keys.defaultTargetId)
+            } else {
+                prefs[Keys.defaultTargetId] = next.defaultTargetId
+            }
+            prefs[Keys.presetFormatsSeeded] = next.presetFormatsSeeded
             prefs[Keys.normalize] = next.cleanup.normalize
             prefs[Keys.stripBoilerplate] = next.cleanup.stripBoilerplate
             prefs[Keys.stripLoneUrlLines] = next.cleanup.stripLoneUrlLines

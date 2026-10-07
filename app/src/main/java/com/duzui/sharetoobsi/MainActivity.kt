@@ -78,7 +78,10 @@ class MainActivity : ComponentActivity() {
                         onSelectTarget = viewModel::selectTarget,
                         onMoveTarget = viewModel::moveTarget,
                         onSaveTarget = viewModel::saveTarget,
-                        onDerivePath = viewModel::previewPath,
+                        onSelectBook = viewModel::selectBook,
+                        onMoveBook = viewModel::moveBook,
+                        onSaveBook = viewModel::saveBook,
+                        onDeriveSkeletonPath = viewModel::previewBookPath,
                         onReadClipboard = {
                             viewModel.readFromClipboard(ClipboardReader.read(this@MainActivity))
                         },
@@ -109,10 +112,14 @@ class MainActivity : ComponentActivity() {
                         onClearAppMapping = viewModel::clearAppMapping,
                         onSaveTarget = viewModel::saveTarget,
                         onMoveTarget = viewModel::moveTarget,
+                        onDeleteTarget = viewModel::deleteTarget,
+                        onDefaultTargetId = viewModel::setDefaultTargetId,
+                        onSaveBook = viewModel::saveBook,
+                        onMoveBook = viewModel::moveBook,
+                        onDeleteBook = viewModel::deleteBook,
                         onSaveFormat = viewModel::saveFormat,
                         onDeleteFormat = viewModel::deleteFormat,
-                        onDerivePath = viewModel::previewPath,
-                        onDeleteTarget = viewModel::deleteTarget,
+                        onDeriveSkeletonPath = viewModel::previewBookPath,
                         onOpenHistory = { screen = Screen.History },
                         onRetryOutbox = viewModel::retryOutbox,
                     )
@@ -165,15 +172,20 @@ class MainActivity : ComponentActivity() {
     private fun isReturnCallback(intent: Intent?): Boolean =
         intent?.action == Intent.ACTION_VIEW && intent.data?.scheme == RETURN_SCHEME
 
+    /**
+     * Obsidian hands control back on this URI once the write is done.
+     *
+     * With nothing remembered this is the quiet-write case: the callback has already
+     * brought us back to the front, so staying put is the whole point, and the activity
+     * must not finish or the user would land wherever they were before.
+     */
     private fun returnToSourceApp() {
-        val sourcePackage = container.pendingReturn.take()
-        if (sourcePackage != null) {
-            // Null when the app is not launchable from a drawer, or is no longer visible
-            // to us; in that case simply closing leaves the user in Obsidian, which is
-            // where they already are.
-            packageManager.getLaunchIntentForPackage(sourcePackage)?.let { launch ->
-                startActivity(launch)
-            }
+        val sourcePackage = container.pendingReturn.take() ?: return
+        // Null when the app is not launchable from a drawer, or is no longer visible to
+        // us; in that case simply closing leaves the user in Obsidian, which is where
+        // they already are.
+        packageManager.getLaunchIntentForPackage(sourcePackage)?.let { launch ->
+            startActivity(launch)
         }
         finish()
     }
