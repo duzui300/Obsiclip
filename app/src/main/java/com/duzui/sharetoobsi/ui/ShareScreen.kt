@@ -41,7 +41,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.duzui.sharetoobsi.ShareUiState
-import com.duzui.sharetoobsi.data.TargetEntity
+import com.duzui.sharetoobsi.TargetDraft
 import com.duzui.sharetoobsi.domain.SourceProfile
 import com.duzui.sharetoobsi.domain.SourceProfiles
 import com.duzui.sharetoobsi.domain.WriteMode
@@ -52,9 +52,9 @@ fun ShareScreen(
     state: ShareUiState,
     message: String?,
     onProfileChange: (SourceProfile) -> Unit,
-    onModeChange: (WriteMode) -> Unit,
     onSelectTarget: (Long?) -> Unit,
-    onAddTarget: (String, String, String, String, String, Boolean) -> Unit,
+    onMoveTarget: (Int, Int) -> Unit,
+    onSaveTarget: (TargetDraft) -> Unit,
     onDerivePath: (String) -> String,
     onReadClipboard: () -> Unit,
     onPayloadEdit: (String) -> Unit,
@@ -75,11 +75,13 @@ fun ShareScreen(
 
     if (addingTarget) {
         AddTargetDialog(
+            existing = null,
             defaultHeading = state.settings.heading,
+            formats = state.formats,
             derivePath = onDerivePath,
             onDismiss = { addingTarget = false },
-            onSave = { name, author, year, path, heading, skeleton ->
-                onAddTarget(name, author, year, path, heading, skeleton)
+            onSave = { draft ->
+                onSaveTarget(draft)
                 addingTarget = false
             },
         )
@@ -120,6 +122,7 @@ fun ShareScreen(
             TargetSection(
                 state = state,
                 onSelectTarget = onSelectTarget,
+                onMoveTarget = onMoveTarget,
                 onAddTarget = { addingTarget = true },
             )
 
@@ -130,7 +133,6 @@ fun ShareScreen(
             }
 
             SourcePicker(state, onProfileChange)
-            ModePicker(state, onModeChange)
         }
     }
 }
@@ -162,6 +164,7 @@ private fun EmptyState(origin: String, onReadClipboard: () -> Unit) {
 private fun TargetSection(
     state: ShareUiState,
     onSelectTarget: (Long?) -> Unit,
+    onMoveTarget: (Int, Int) -> Unit,
     onAddTarget: () -> Unit,
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
@@ -173,16 +176,20 @@ private fun TargetSection(
                 modifier = Modifier.horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                FilterChip(
-                    selected = state.selectedTargetId == null,
-                    onClick = { onSelectTarget(null) },
-                    label = { Text("收件箱") },
-                )
-                state.savedTargets.forEach { target ->
+                state.savedTargets.forEachIndexed { index, target ->
+                    // Long-press a chip and drag sideways to reorder. The same order shows
+                    // top-to-bottom in settings, because both read one column.
+                    val drag = rememberDragReorder(
+                        index = index,
+                        itemCount = state.savedTargets.size,
+                        horizontal = true,
+                        onMove = onMoveTarget,
+                    )
                     FilterChip(
-                        selected = state.selectedTargetId == target.id,
+                        selected = state.chosenTarget?.id == target.id,
                         onClick = { onSelectTarget(target.id) },
                         label = { Text(target.name) },
+                        modifier = drag,
                     )
                 }
                 FilterChip(
@@ -198,8 +205,12 @@ private fun TargetSection(
                     state.settings.mode == WriteMode.OFFICIAL ->
                         "追加到文件末尾 —— 官方 URI 无法指定小节"
                     state.effectiveHeading != null -> "追加到小节：${state.effectiveHeading}"
-                    else -> "追加到文件末尾（没选书目的内容先进收件箱）"
+                    else -> "追加到文件末尾"
                 },
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Text(
+                "长按芯片可以拖动排序",
                 style = MaterialTheme.typography.bodySmall,
             )
         }
@@ -259,25 +270,6 @@ private fun SourcePicker(state: ShareUiState, onProfileChange: (SourceProfile) -
                     },
                 )
             }
-        }
-    }
-}
-
-@Composable
-private fun ModePicker(state: ShareUiState, onModeChange: (WriteMode) -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text("写入方式", style = MaterialTheme.typography.labelMedium)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(
-                selected = state.settings.mode == WriteMode.ADVANCED,
-                onClick = { onModeChange(WriteMode.ADVANCED) },
-                label = { Text("Advanced URI") },
-            )
-            FilterChip(
-                selected = state.settings.mode == WriteMode.OFFICIAL,
-                onClick = { onModeChange(WriteMode.OFFICIAL) },
-                label = { Text("官方 URI") },
-            )
         }
     }
 }

@@ -23,8 +23,9 @@ class MainActivity : ComponentActivity() {
     private var incoming by mutableStateOf<IncomingShare?>(null)
     private var screen by mutableStateOf(Screen.Share)
 
-    /** Bumped each time the quick settings tile asks for a clipboard capture. */
-    private var tileRequests by mutableStateOf(0)
+    /** Bumped when a fresh launch or a tile tap should pull in the clipboard. */
+    private var launcherAdoptRequests by mutableStateOf(0)
+    private var tileAdoptRequests by mutableStateOf(0)
 
     /** A target a Direct Share shortcut picked, applied once the target list has loaded. */
     private var requestedTargetId by mutableStateOf<Long?>(null)
@@ -41,8 +42,10 @@ class MainActivity : ComponentActivity() {
         }
 
         incoming = readIncoming()
-        val openedWithoutShare = incoming == null
-        if (isFromTile(intent)) tileRequests = 1
+        // Only a genuine fresh launch counts. A configuration change re-runs onCreate, and
+        // re-adopting there would throw away an edit in progress.
+        if (savedInstanceState == null && incoming == null) launcherAdoptRequests = 1
+        if (isFromTile(intent)) tileAdoptRequests = 1
         requestedTargetId = targetFrom(intent)
 
         setContent {
@@ -58,13 +61,13 @@ class MainActivity : ComponentActivity() {
                         requestedTargetId = null
                     }
                 }
-                LaunchedEffect(tileRequests) {
-                    when {
-                        // The tile exists to capture the clipboard, so it always does.
-                        tileRequests > 0 -> viewModel.adoptClipboardIfEnabled(force = true)
-                        // Opening the app directly may adopt it, if the user asked for that.
-                        openedWithoutShare -> viewModel.adoptClipboardIfEnabled()
-                    }
+                // Opening the app directly may adopt the clipboard, if the user asked for it.
+                LaunchedEffect(launcherAdoptRequests) {
+                    if (launcherAdoptRequests > 0) viewModel.adoptClipboardIfEnabled()
+                }
+                // The tile exists to capture the clipboard, so it always does.
+                LaunchedEffect(tileAdoptRequests) {
+                    if (tileAdoptRequests > 0) viewModel.adoptClipboardIfEnabled(force = true)
                 }
 
                 when (screen) {
@@ -72,9 +75,9 @@ class MainActivity : ComponentActivity() {
                         state = state,
                         message = message,
                         onProfileChange = viewModel::setProfile,
-                        onModeChange = viewModel::setMode,
                         onSelectTarget = viewModel::selectTarget,
-                        onAddTarget = viewModel::addTarget,
+                        onMoveTarget = viewModel::moveTarget,
+                        onSaveTarget = viewModel::saveTarget,
                         onDerivePath = viewModel::previewPath,
                         onReadClipboard = {
                             viewModel.readFromClipboard(ClipboardReader.read(this@MainActivity))
@@ -93,7 +96,6 @@ class MainActivity : ComponentActivity() {
                         onHeading = viewModel::setHeading,
                         onTemplate = viewModel::setTemplate,
                         onPathTemplate = viewModel::setPathTemplate,
-                        onInboxPath = viewModel::setInboxPath,
                         onTags = viewModel::setTags,
                         onMode = viewModel::setMode,
                         onSilent = viewModel::setSilent,
@@ -105,7 +107,10 @@ class MainActivity : ComponentActivity() {
                         onDeleteProfile = viewModel::deleteUserProfile,
                         onSetAppMapping = viewModel::setAppMapping,
                         onClearAppMapping = viewModel::clearAppMapping,
-                        onSaveTarget = viewModel::addTarget,
+                        onSaveTarget = viewModel::saveTarget,
+                        onMoveTarget = viewModel::moveTarget,
+                        onSaveFormat = viewModel::saveFormat,
+                        onDeleteFormat = viewModel::deleteFormat,
                         onDerivePath = viewModel::previewPath,
                         onDeleteTarget = viewModel::deleteTarget,
                         onOpenHistory = { screen = Screen.History },
@@ -131,7 +136,14 @@ class MainActivity : ComponentActivity() {
             return
         }
         if (isFromTile(intent)) {
-            tileRequests++
+            tileAdoptRequests++
+            return
+        }
+        // Brought to the front from the launcher while still alive. This is the common
+        // second capture of a session, and it has to behave like a fresh launch — the
+        // text on screen is from last time and is stale by definition.
+        if (isLauncherEntry(intent)) {
+            launcherAdoptRequests++
             return
         }
         requestedTargetId = targetFrom(intent)
@@ -139,6 +151,9 @@ class MainActivity : ComponentActivity() {
         // A share arrived while settings were open; it belongs on the share screen.
         if (incoming != null) screen = Screen.Share
     }
+
+    private fun isLauncherEntry(intent: Intent): Boolean =
+        intent.action == Intent.ACTION_MAIN && intent.getStringExtra(Intent.EXTRA_TEXT) == null
 
     private fun isFromTile(intent: Intent?): Boolean =
         intent?.getBooleanExtra(EXTRA_FROM_TILE, false) == true

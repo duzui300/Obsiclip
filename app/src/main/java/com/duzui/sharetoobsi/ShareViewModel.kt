@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.duzui.sharetoobsi.data.AppProfileEntity
 import com.duzui.sharetoobsi.data.AppSettings
+import com.duzui.sharetoobsi.data.FormatEntity
 import com.duzui.sharetoobsi.data.HistoryEntity
 import com.duzui.sharetoobsi.data.OutboxEntity
 import com.duzui.sharetoobsi.data.ProfileEntity
@@ -32,6 +33,18 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+/** What the add/edit form collects, so create and edit share one path. */
+data class TargetDraft(
+    val rowId: Long? = null,
+    val name: String = "",
+    val author: String = "",
+    val year: String = "",
+    val path: String = "",
+    val heading: String = "",
+    val formatId: Long? = null,
+    val createSkeleton: Boolean = false,
+)
+
 /** Obsidian calls this back once it has handled the URI, if the user asked to be returned. */
 const val RETURN_CALLBACK = "sharetoobsi://return"
 
@@ -53,13 +66,19 @@ data class ShareUiState(
     val appMappings: Map<String, String> = emptyMap(),
     val installedApps: List<AppEntry> = emptyList(),
     val history: List<HistoryEntity> = emptyList(),
+    /** Named output formats a target can pick from. */
+    val formats: List<FormatEntity> = emptyList(),
     val savedTargets: List<TargetEntity> = emptyList(),
-    /** null is the inbox: whatever is being captured without naming a book first. */
+    /** null falls back to the first target, so there is always somewhere to write. */
     val selectedTargetId: Long? = null,
     /** Set once the user hand-edits the payload; cleared whenever an input changes. */
     val payloadOverride: String? = null,
 ) {
-    val chosenTarget: TargetEntity? = savedTargets.firstOrNull { it.id == selectedTargetId }
+    val chosenTarget: TargetEntity? =
+        savedTargets.firstOrNull { it.id == selectedTargetId } ?: savedTargets.firstOrNull()
+
+    private val chosenFormat: FormatEntity? =
+        formats.firstOrNull { it.id == chosenTarget?.formatId }
 
     private val values: TemplateValues = TemplateValues(
         text = Cleanup.clean(raw, profile, settings.cleanup),
@@ -71,16 +90,22 @@ data class ShareUiState(
         date = LocalDate.now().toString(),
     )
 
-    /** A user-written profile may carry its own output shape. */
-    val effectiveTemplate: String = profile.template.ifBlank { settings.template }
+    /**
+     * Output shape, most specific first: the format the target picked, then the rule set's
+     * own template, then the default. The target wins because it knows the vault's
+     * convention for that note; the rule set only knows the shape of what comes in.
+     */
+    val effectiveTemplate: String =
+        chosenFormat?.template ?: profile.template.ifBlank { settings.template }
 
     val payload: String = payloadOverride ?: Template.render(effectiveTemplate, values)
 
-    val targetPath: String = chosenTarget?.path ?: settings.inboxPath
+    /** Only reached before the first target is seeded, or if every target was deleted. */
+    val targetPath: String = chosenTarget?.path ?: Defaults.INBOX_NOTE
 
     /**
-     * A heading that does not exist makes the Advanced URI silently write nothing, so the
-     * inbox target is written without one rather than aimed at a guess.
+     * A heading that does not exist makes the Advanced URI silently write nothing, so a
+     * target with no heading is written without one rather than aimed at a guess.
      */
     val effectiveHeading: String? = chosenTarget?.heading?.takeIf { it.isNotBlank() }
 }
@@ -93,6 +118,7 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
     private val outbox = container.db.outbox()
     private val profiles = container.db.profiles()
     private val appProfiles = container.db.appProfiles()
+    private val formatDao = container.db.formats()
 
     private val _state = MutableStateFlow(ShareUiState())
     val state: StateFlow<ShareUiState> = _state.asStateFlow()
@@ -136,7 +162,27 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
         viewModelScope.launch {
+            formatDao.observeAll().collect { rows -> _state.update { it.copy(formats = rows) } }
+        }
+        viewModelScope.launch {
             targets.observeAll().collect { list ->
+                if (!_state.value.settings.defaultTargetSeeded) {
+                    // Offered once, not restored when missing: from here the inbox is an
+                    // ordinary target — reorderable, editable, removable — so putting it
+                    // back after the user deleted it would be overriding them.
+                    container.settings.update { it.copy(defaultTargetSeeded = true) }
+                    if (list.none { it.path == Defaults.INBOX_NOTE }) {
+                        targets.upsert(
+                            TargetEntity(
+                                name = Defaults.INBOX_NAME,
+                                path = Defaults.INBOX_NOTE,
+                                // Ahead of existing targets, which all default to 0.
+                                sortOrder = -1,
+                            )
+                        )
+                        return@collect
+                    }
+                }
                 _state.update { current ->
                     // A target deleted since it was chosen, or chosen before the list
                     // loaded, must not stay selected pointing at nothing.
@@ -194,13 +240,16 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
     /**
      * Opened directly rather than from a share — from the launcher or the quick settings
      * tile. [force] is for the tile, which exists for exactly this; otherwise it happens
-     * only if the user turned it on, and never over text already in hand.
+     * only if the user turned it on.
+     *
+     * It always overwrites what is on screen. The app stays alive after a write, so
+     * anything left over is from last time and is stale by definition — refusing to
+     * replace it would mean the second capture of a session never arrived.
      */
     fun adoptClipboardIfEnabled(force: Boolean = false) {
         viewModelScope.launch {
             val settings = container.settings.settings.first()
             if (!force && !settings.autoReadClipboard) return@launch
-            if (_state.value.raw.isNotBlank()) return@launch
             readFromClipboard(ClipboardReader.read(getApplication()), quiet = true)
         }
     }
@@ -222,7 +271,6 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
     fun setHeading(value: String) = settings { it.copy(heading = value) }
     fun setTemplate(value: String) = settings { it.copy(template = value) }
     fun setPathTemplate(value: String) = settings { it.copy(pathTemplate = value) }
-    fun setInboxPath(value: String) = settings { it.copy(inboxPath = value) }
     fun setTags(value: String) = settings { it.copy(tags = value) }
     fun setMode(mode: WriteMode) = settings { it.copy(mode = mode) }
     fun setSilent(value: Boolean) = settings { it.copy(silent = value) }
@@ -244,41 +292,59 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
      * Remembers a book (or any other destination) so the next share can be filed without
      * typing. Optionally writes its skeleton, which is the only way a brand new note gets
      * the `## Quotes worth keeping` section the next write needs to aim at.
+     *
+     * Create and edit share this path, so editing keeps `seeded` — otherwise a book whose
+     * skeleton is already written would look new again.
      */
-    fun addTarget(
-        name: String,
-        author: String,
-        year: String,
-        path: String,
-        heading: String,
-        createSkeleton: Boolean,
-    ) {
-        val cleanName = name.trim()
-        if (cleanName.isEmpty()) {
+    fun saveTarget(draft: TargetDraft) {
+        val name = draft.name.trim()
+        if (name.isEmpty()) {
             _message.value = "先填书名"
             return
         }
-        val resolvedPath = path.trim().ifBlank { previewPath(cleanName) }
+        val path = draft.path.trim().ifBlank { previewPath(name) }
 
         viewModelScope.launch {
+            val existing = draft.rowId?.let { id -> targets.all().firstOrNull { it.id == id } }
             val id = targets.upsert(
                 TargetEntity(
-                    name = cleanName,
-                    path = resolvedPath,
-                    heading = heading.trim(),
-                    author = author.trim(),
-                    year = year.trim(),
+                    id = draft.rowId ?: 0,
+                    name = name,
+                    path = path,
+                    heading = draft.heading.trim(),
+                    author = draft.author.trim(),
+                    year = draft.year.trim(),
+                    seeded = existing?.seeded ?: false,
+                    formatId = draft.formatId,
+                    sortOrder = existing?.sortOrder ?: _state.value.savedTargets.size,
                 )
             )
             pendingTargetId = id
             _state.update { it.copy(selectedTargetId = id) }
-            if (createSkeleton) {
-                if (writeSkeleton(cleanName, resolvedPath, author.trim(), year.trim())) {
+
+            if (draft.createSkeleton) {
+                if (writeSkeleton(name, path, draft.author.trim(), draft.year.trim())) {
                     targets.markSeeded(id)
-                    _message.value = "已添加「$cleanName」并写入骨架"
+                    _message.value = "已保存「$name」并写入骨架"
                 }
             } else {
-                _message.value = "已添加目标「$cleanName」"
+                _message.value =
+                    if (existing == null) "已添加目标「$name」" else "已保存「$name」"
+            }
+        }
+    }
+
+    /**
+     * Moves a target one slot and persists the whole order, so the chip row and the
+     * settings list cannot drift apart — they read the same column.
+     */
+    fun moveTarget(fromIndex: Int, toIndex: Int) {
+        val list = _state.value.savedTargets.toMutableList()
+        if (fromIndex !in list.indices || toIndex !in list.indices || fromIndex == toIndex) return
+        list.add(toIndex, list.removeAt(fromIndex))
+        viewModelScope.launch {
+            list.forEachIndexed { index, target ->
+                if (target.sortOrder != index) targets.upsert(target.copy(sortOrder = index))
             }
         }
     }
@@ -288,6 +354,36 @@ class ShareViewModel(application: Application) : AndroidViewModel(application) {
         if (pendingTargetId == target.id) pendingTargetId = null
         _state.update {
             if (it.selectedTargetId == target.id) it.copy(selectedTargetId = null) else it
+        }
+    }
+
+    // ---- output formats ----------------------------------------------------
+
+    fun saveFormat(rowId: Long?, name: String, template: String) {
+        if (name.isBlank()) {
+            _message.value = "给这个格式起个名字"
+            return
+        }
+        viewModelScope.launch {
+            formatDao.upsert(
+                FormatEntity(
+                    id = rowId ?: 0,
+                    name = name.trim(),
+                    template = template,
+                    sortOrder = _state.value.formats.size,
+                )
+            )
+            _message.value = "已保存格式「$name」"
+        }
+    }
+
+    fun deleteFormat(row: FormatEntity) {
+        viewModelScope.launch {
+            formatDao.delete(row.id)
+            // Targets pointing at it fall back to the default rather than to nothing.
+            _state.value.savedTargets
+                .filter { it.formatId == row.id }
+                .forEach { targets.upsert(it.copy(formatId = null)) }
         }
     }
 

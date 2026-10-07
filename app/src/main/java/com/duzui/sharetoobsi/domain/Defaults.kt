@@ -11,14 +11,14 @@ object Defaults {
     /** Vault-relative path of the note for the book currently being read. */
     const val BOOK_PATH_TEMPLATE = "30-Reading/Book/{title}.md"
 
-    /** The vault's default folder for unsorted capture. */
-    const val INBOX_PATH = "00-Inbox"
-
     /**
      * Where captures go when no book has been named. A rolling note rather than
      * `00-Inbox/_index.md`, which is a landing page with live query blocks in it.
      */
     const val INBOX_NOTE = "00-Inbox/摘录.md"
+
+    /** The seeded inbox target's name. It is an ordinary target, not a special case. */
+    const val INBOX_NAME = "收件箱"
 
     const val TAGS = "#reading"
 

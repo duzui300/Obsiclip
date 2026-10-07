@@ -11,6 +11,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -34,6 +35,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.duzui.sharetoobsi.ShareUiState
+import com.duzui.sharetoobsi.TargetDraft
+import com.duzui.sharetoobsi.data.FormatEntity
 import com.duzui.sharetoobsi.data.ProfileEntity
 import com.duzui.sharetoobsi.data.TargetEntity
 import com.duzui.sharetoobsi.domain.CleanupOptions
@@ -49,7 +52,6 @@ fun SettingsScreen(
     onHeading: (String) -> Unit,
     onTemplate: (String) -> Unit,
     onPathTemplate: (String) -> Unit,
-    onInboxPath: (String) -> Unit,
     onTags: (String) -> Unit,
     onMode: (WriteMode) -> Unit,
     onSilent: (Boolean) -> Unit,
@@ -61,7 +63,10 @@ fun SettingsScreen(
     onDeleteProfile: (ProfileEntity) -> Unit,
     onSetAppMapping: (String, String) -> Unit,
     onClearAppMapping: (String) -> Unit,
-    onSaveTarget: (String, String, String, String, String, Boolean) -> Unit,
+    onSaveTarget: (TargetDraft) -> Unit,
+    onMoveTarget: (Int, Int) -> Unit,
+    onSaveFormat: (Long?, String, String) -> Unit,
+    onDeleteFormat: (FormatEntity) -> Unit,
     onDerivePath: (String) -> String,
     onDeleteTarget: (TargetEntity) -> Unit,
     onOpenHistory: () -> Unit,
@@ -69,16 +74,23 @@ fun SettingsScreen(
 ) {
     val settings = state.settings
     var addingTarget by remember { mutableStateOf(false) }
+    var editingTarget by remember { mutableStateOf<TargetEntity?>(null) }
     var profileMenu by remember { mutableStateOf(false) }
 
-    if (addingTarget) {
+    if (addingTarget || editingTarget != null) {
         AddTargetDialog(
+            existing = editingTarget,
             defaultHeading = settings.heading,
+            formats = state.formats,
             derivePath = onDerivePath,
-            onDismiss = { addingTarget = false },
-            onSave = { name, author, year, path, heading, skeleton ->
-                onSaveTarget(name, author, year, path, heading, skeleton)
+            onDismiss = {
                 addingTarget = false
+                editingTarget = null
+            },
+            onSave = { draft ->
+                onSaveTarget(draft)
+                addingTarget = false
+                editingTarget = null
             },
         )
     }
@@ -107,17 +119,21 @@ fun SettingsScreen(
             Field("Vault 名称", settings.vault, onVault)
             Field("小节标题", settings.heading, onHeading, "留空则追加到文件末尾")
             Field("书目路径模板", settings.pathTemplate, onPathTemplate, "可用 {title} {author} {year} {date}")
-            Field("收件箱笔记", settings.inboxPath, onInboxPath, "没选书目时写到这里")
 
             Section("输出格式")
             Field(
-                "模板",
+                "默认格式模板",
                 settings.template,
                 onTemplate,
                 "占位符：" + Template.placeholders.joinToString(" ") { "{$it}" },
                 singleLine = false,
             )
             Field("标签", settings.tags, onTags)
+            FormatsSection(
+                formats = state.formats,
+                onSave = onSaveFormat,
+                onDelete = onDeleteFormat,
+            )
 
             Section("写入方式")
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -199,8 +215,20 @@ fun SettingsScreen(
                 style = MaterialTheme.typography.bodySmall,
             )
             Button(onClick = { addingTarget = true }) { Text("添加目标") }
-            state.savedTargets.forEach { target ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
+            if (state.savedTargets.size > 1) {
+                Text(
+                    "长按拖动排序。顺序和分享界面的芯片左右一致。",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            state.savedTargets.forEachIndexed { index, target ->
+                val drag = rememberDragReorder(
+                    index = index,
+                    itemCount = state.savedTargets.size,
+                    horizontal = false,
+                    onMove = onMoveTarget,
+                )
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = drag) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(target.name, style = MaterialTheme.typography.bodyMedium)
                         Text(
@@ -213,10 +241,16 @@ fun SettingsScreen(
                                 }
                                 val by = listOf(target.author, target.year).filter { it.isNotBlank() }
                                 if (by.isNotEmpty()) append("　— ").append(by.joinToString(" "))
+                                state.formats.firstOrNull { it.id == target.formatId }?.let {
+                                    append("　· 格式：").append(it.name)
+                                }
                                 if (!target.seeded) append("　· 未建骨架")
                             },
                             style = MaterialTheme.typography.bodySmall,
                         )
+                    }
+                    IconButton(onClick = { editingTarget = target }) {
+                        Icon(Icons.Filled.Edit, contentDescription = "编辑")
                     }
                     IconButton(onClick = { onDeleteTarget(target) }) {
                         Icon(Icons.Filled.Delete, contentDescription = "删除")

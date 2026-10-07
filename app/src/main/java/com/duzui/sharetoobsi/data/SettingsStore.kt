@@ -18,7 +18,6 @@ data class AppSettings(
     val heading: String = Defaults.HEADING,
     val template: String = Defaults.TEMPLATE,
     val pathTemplate: String = Defaults.BOOK_PATH_TEMPLATE,
-    val inboxPath: String = Defaults.INBOX_NOTE,
     val tags: String = Defaults.TAGS,
     val mode: WriteMode = WriteMode.ADVANCED,
     val silent: Boolean = true,
@@ -35,6 +34,11 @@ data class AppSettings(
      */
     val returnToSource: Boolean = false,
     val defaultProfileId: String = "generic",
+    /**
+     * Whether the inbox has been offered as a target yet. Seeded once, not re-added when
+     * missing: the user is free to delete or rename it like any other target.
+     */
+    val defaultTargetSeeded: Boolean = false,
     val cleanup: CleanupOptions = CleanupOptions(),
 )
 
@@ -47,13 +51,13 @@ class SettingsStore(private val context: Context) {
         val heading = stringPreferencesKey("heading")
         val template = stringPreferencesKey("template")
         val pathTemplate = stringPreferencesKey("pathTemplate")
-        val inboxPath = stringPreferencesKey("inboxPath")
         val tags = stringPreferencesKey("tags")
         val mode = stringPreferencesKey("mode")
         val silent = booleanPreferencesKey("silent")
         val autoReadClipboard = booleanPreferencesKey("autoReadClipboard")
         val returnToSource = booleanPreferencesKey("returnToSource")
         val defaultProfileId = stringPreferencesKey("defaultProfileId")
+        val defaultTargetSeeded = booleanPreferencesKey("defaultTargetSeeded")
 
         val normalize = booleanPreferencesKey("cleanup.normalize")
         val stripBoilerplate = booleanPreferencesKey("cleanup.stripBoilerplate")
@@ -74,7 +78,6 @@ class SettingsStore(private val context: Context) {
             heading = prefs[Keys.heading] ?: defaults.heading,
             template = prefs[Keys.template] ?: defaults.template,
             pathTemplate = prefs[Keys.pathTemplate] ?: defaults.pathTemplate,
-            inboxPath = prefs[Keys.inboxPath] ?: defaults.inboxPath,
             tags = prefs[Keys.tags] ?: defaults.tags,
             mode = prefs[Keys.mode]?.let { runCatching { WriteMode.valueOf(it) }.getOrNull() }
                 ?: defaults.mode,
@@ -82,6 +85,7 @@ class SettingsStore(private val context: Context) {
             autoReadClipboard = prefs[Keys.autoReadClipboard] ?: defaults.autoReadClipboard,
             returnToSource = prefs[Keys.returnToSource] ?: defaults.returnToSource,
             defaultProfileId = prefs[Keys.defaultProfileId] ?: defaults.defaultProfileId,
+            defaultTargetSeeded = prefs[Keys.defaultTargetSeeded] ?: defaults.defaultTargetSeeded,
             cleanup = CleanupOptions(
                 normalize = prefs[Keys.normalize] ?: base.normalize,
                 stripBoilerplate = prefs[Keys.stripBoilerplate] ?: base.stripBoilerplate,
@@ -102,13 +106,13 @@ class SettingsStore(private val context: Context) {
             prefs[Keys.heading] = next.heading
             prefs[Keys.template] = next.template
             prefs[Keys.pathTemplate] = next.pathTemplate
-            prefs[Keys.inboxPath] = next.inboxPath
             prefs[Keys.tags] = next.tags
             prefs[Keys.mode] = next.mode.name
             prefs[Keys.silent] = next.silent
             prefs[Keys.autoReadClipboard] = next.autoReadClipboard
             prefs[Keys.returnToSource] = next.returnToSource
             prefs[Keys.defaultProfileId] = next.defaultProfileId
+            prefs[Keys.defaultTargetSeeded] = next.defaultTargetSeeded
             prefs[Keys.normalize] = next.cleanup.normalize
             prefs[Keys.stripBoilerplate] = next.cleanup.stripBoilerplate
             prefs[Keys.stripLoneUrlLines] = next.cleanup.stripLoneUrlLines

@@ -22,6 +22,18 @@ data class TargetEntity(
     val year: String = "",
     /** Set once a Book skeleton has been written, so it is never written twice. */
     val seeded: Boolean = false,
+    /** A named output format; null uses the default one. */
+    val formatId: Long? = null,
+    /** Position in the chip row, which is also the order in settings. */
+    val sortOrder: Int = 0,
+)
+
+/** A named output template, so a target can pick a shape rather than edit one. */
+@Entity(tableName = "formats")
+data class FormatEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val name: String,
+    val template: String,
     val sortOrder: Int = 0,
 )
 

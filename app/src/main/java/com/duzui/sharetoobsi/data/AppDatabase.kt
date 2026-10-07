@@ -14,8 +14,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         OutboxEntity::class,
         ProfileEntity::class,
         AppProfileEntity::class,
+        FormatEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -25,6 +26,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun outbox(): OutboxDao
     abstract fun profiles(): ProfileDao
     abstract fun appProfiles(): AppProfileDao
+    abstract fun formats(): FormatDao
 
     companion object {
 
@@ -72,6 +74,23 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * `formatId` is nullable, so no DEFAULT; `formats` is a fresh table, so it has to
+         * match Room's generated CREATE column for column.
+         */
+        private val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE targets ADD COLUMN formatId INTEGER")
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `formats` (" +
+                        "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`name` TEXT NOT NULL, " +
+                        "`template` TEXT NOT NULL, " +
+                        "`sortOrder` INTEGER NOT NULL)"
+                )
+            }
+        }
+
         @Volatile
         private var instance: AppDatabase? = null
 
@@ -81,7 +100,7 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "sharetoobsi.db",
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                     .build()
                     .also { instance = it }
             }

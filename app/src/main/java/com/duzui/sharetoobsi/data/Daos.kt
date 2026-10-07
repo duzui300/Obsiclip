@@ -29,6 +29,18 @@ interface TargetDao {
 }
 
 @Dao
+interface FormatDao {
+    @Query("SELECT * FROM formats ORDER BY sortOrder, id")
+    fun observeAll(): Flow<List<FormatEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(format: FormatEntity): Long
+
+    @Query("DELETE FROM formats WHERE id = :id")
+    suspend fun delete(id: Long)
+}
+
+@Dao
 interface ProfileDao {
     @Query("SELECT * FROM profiles ORDER BY id")
     fun observeAll(): Flow<List<ProfileEntity>>
