@@ -10,6 +10,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.SystemClock
+import android.util.Log
 import androidx.core.content.ContextCompat
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
@@ -65,6 +66,7 @@ class KindleNotebookService : AccessibilityService() {
     private val armReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             watchingUntil = SystemClock.elapsedRealtime() + WATCH_WINDOW_MS
+            Log.d(TAG, "armed; watching for the notebook")
         }
     }
 
@@ -72,6 +74,7 @@ class KindleNotebookService : AccessibilityService() {
         super.onServiceConnected()
         store = KindleImportStore(this)
         store.connected = true
+        Log.d(TAG, "service connected")
         ContextCompat.registerReceiver(
             this,
             armReceiver,
@@ -108,7 +111,9 @@ class KindleNotebookService : AccessibilityService() {
         // waits out the full timeout. Doing that here stalls the whole accessibility
         // pipeline, which is what made the device feel stuck.
         val watching = SystemClock.elapsedRealtime() < watchingUntil
-        if (!store.armed || running) return
+        if (!store.armed) return
+        Log.d(TAG, "event ${event.eventType} armed watching=$watching seen=$notebookSeen")
+        if (running) return
         if (!notebookSeen && !watching) return
         val now = SystemClock.elapsedRealtime()
         if (now - lastAttemptAt < ATTEMPT_INTERVAL_MS) return
@@ -118,13 +123,16 @@ class KindleNotebookService : AccessibilityService() {
         scope.launch {
             try {
                 val root = rootInActiveWindow
-                if (root == null || !looksLikeNotebook(root)) return@launch
+                val shaped = root != null && looksLikeNotebook(root)
+                Log.d(TAG, "attempt: root=${root != null} notebook=$shaped")
+                if (!shaped) return@launch
 
                 // Committed: from here the run owns the arming flag.
                 store.armed = false
                 val droveItself = runCollection()
                 val items = collected.values.toList()
                 collected.clear()
+                Log.d(TAG, "collected ${items.size}, scrolledItself=$droveItself")
                 store.publish(items, autoScrolled = droveItself)
                 notifyFinished(items.size, droveItself)
             } finally {
@@ -317,6 +325,7 @@ class KindleNotebookService : AccessibilityService() {
     }
 
     private companion object {
+        const val TAG = "KindleImport"
         const val KINDLE_PACKAGE = "com.amazon.kindle"
         const val NOTEBOOK_CLASS = "notebook"
 
