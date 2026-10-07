@@ -37,8 +37,10 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.duzui.sharetoobsi.BookDraft
+import com.duzui.sharetoobsi.R
 import com.duzui.sharetoobsi.ShareUiState
 import com.duzui.sharetoobsi.TargetDraft
 import com.duzui.sharetoobsi.data.BookEntity
@@ -88,6 +90,9 @@ fun SettingsScreen(
     onOpenPendingImport: () -> Unit,
 ) {
     val settings = state.settings
+    // Fetched up front: a lambda that is not itself composable cannot call stringResource.
+    val endOfFile = stringResource(R.string.settings_end_of_file)
+    val noAuthorYear = stringResource(R.string.settings_no_author_year)
 
     var editingTarget by remember { mutableStateOf<TargetEntity?>(null) }
     var addingTarget by remember { mutableStateOf(false) }
@@ -99,12 +104,15 @@ fun SettingsScreen(
     // Which sections are shut. Kept as a list of titles so it survives a rotation.
     // Everything starts folded. The screen grew past the point where an open list
     // of nine sections reads as anything.
-    var collapsed by rememberSaveable { mutableStateOf(ArrayList(SECTION_TITLES)) }
-    fun toggle(title: String) {
-        collapsed = if (title in collapsed) {
-            ArrayList(collapsed.filterNot { it == title })
+    var collapsed by rememberSaveable {
+        mutableStateOf(ArrayList(SettingsSection.entries.map { it.name }))
+    }
+    fun toggle(section: SettingsSection) {
+        val key = section.name
+        collapsed = if (key in collapsed) {
+            ArrayList(collapsed.filterNot { it == key })
         } else {
-            ArrayList(collapsed + title)
+            ArrayList(collapsed + key)
         }
     }
 
@@ -144,15 +152,16 @@ fun SettingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("设置") },
+                title = { Text(stringResource(R.string.settings_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "返回")
+                        Icon(Icons.Filled.ArrowBack, contentDescription = stringResource(R.string.action_back))
                     }
                 },
                 actions = {
                     Text(
-                        if (collapsed.isEmpty()) "全部展开" else "点标题可折叠",
+                        if (collapsed.isEmpty()) stringResource(R.string.settings_expand_all)
+                        else stringResource(R.string.settings_collapse_hint),
                         style = MaterialTheme.typography.labelSmall,
                         modifier = Modifier.padding(end = 12.dp),
                     )
@@ -168,30 +177,34 @@ fun SettingsScreen(
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Section("写入目标", collapsed, ::toggle) {
-                Field("Vault 名称", settings.vault, onVault)
-                Field("默认小节标题", settings.heading, onHeading, "添加目的地时的默认值")
+            Section(SettingsSection.WriteTarget, collapsed, ::toggle) {
+                Field(stringResource(R.string.settings_vault_name), settings.vault, onVault)
                 Field(
-                    "新目的地的默认路径",
+                    stringResource(R.string.settings_default_heading),
+                    settings.heading,
+                    onHeading,
+                    stringResource(R.string.settings_default_heading_hint),
+                )
+                Field(
+                    stringResource(R.string.settings_default_path),
                     settings.pathTemplate,
                     onPathTemplate,
-                    "可用 {title} {author} {year} {date}",
+                    stringResource(R.string.settings_path_placeholders),
                 )
             }
 
-            Section("目的地", collapsed, ::toggle) {
+            Section(SettingsSection.Destinations, collapsed, ::toggle) {
                 Text(
-                    "写到哪、写到哪个小节、用哪种格式。路径可以用 {title} {author} {year}，" +
-                        "由选中的书填写 —— 所以一条「书目笔记」就够所有书用。",
+                    stringResource(R.string.settings_destinations_hint),
                     style = MaterialTheme.typography.bodySmall,
                 )
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("默认收件箱", modifier = Modifier.weight(1f))
+                    Text(stringResource(R.string.settings_default_inbox), modifier = Modifier.weight(1f))
                     OutlinedButton(onClick = { defaultTargetMenu = true }) {
                         Text(
                             state.savedTargets.firstOrNull { it.id == settings.defaultTargetId }?.name
-                                ?: "第一个目标"
+                                ?: stringResource(R.string.settings_first_target)
                         )
                     }
                     DropdownMenu(
@@ -199,7 +212,7 @@ fun SettingsScreen(
                         onDismissRequest = { defaultTargetMenu = false },
                     ) {
                         DropdownMenuItem(
-                            text = { Text("第一个目标") },
+                            text = { Text(stringResource(R.string.settings_first_target)) },
                             onClick = {
                                 onDefaultTargetId(null)
                                 defaultTargetMenu = false
@@ -217,9 +230,14 @@ fun SettingsScreen(
                     }
                 }
 
-                Button(onClick = { addingTarget = true }) { Text("添加目的地") }
+                Button(onClick = { addingTarget = true }) {
+                    Text(stringResource(R.string.settings_add_destination))
+                }
                 if (state.savedTargets.size > 1) {
-                    Text("长按拖动排序，和写入界面的顺序一致。", style = MaterialTheme.typography.bodySmall)
+                    Text(
+                    stringResource(R.string.settings_drag_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                )
                 }
 
                 val targetReorder = rememberReorderState(state.savedTargets.size)
@@ -240,7 +258,7 @@ fun SettingsScreen(
                                 buildString {
                                     append(target.path)
                                     if (target.heading.isBlank()) {
-                                        append("（文件末尾）")
+                                        append(endOfFile)
                                     } else {
                                         append(" › ").append(target.heading)
                                     }
@@ -252,22 +270,24 @@ fun SettingsScreen(
                             )
                         }
                         IconButton(onClick = { editingTarget = target }) {
-                            Icon(Icons.Filled.Edit, contentDescription = "编辑")
+                            Icon(Icons.Filled.Edit, contentDescription = stringResource(R.string.action_edit))
                         }
                         IconButton(onClick = { onDeleteTarget(target) }) {
-                            Icon(Icons.Filled.Delete, contentDescription = "删除")
+                            Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.action_delete))
                         }
                     }
                     HorizontalDivider()
                 }
             }
 
-            Section("书籍", collapsed, ::toggle) {
+            Section(SettingsSection.Books, collapsed, ::toggle) {
                 Text(
-                    "在读什么。只提供书名、作者、年份这些信息，不决定写到哪。",
+                    stringResource(R.string.settings_books_hint),
                     style = MaterialTheme.typography.bodySmall,
                 )
-                Button(onClick = { addingBook = true }) { Text("添加书籍") }
+                Button(onClick = { addingBook = true }) {
+                    Text(stringResource(R.string.settings_add_book))
+                }
                 if (state.savedBooks.size > 1) {
                     Text("长按拖动排序，和写入界面的顺序一致。", style = MaterialTheme.typography.bodySmall)
                 }
@@ -290,7 +310,7 @@ fun SettingsScreen(
                                 listOfNotNull(
                                     book.author.takeIf { it.isNotBlank() },
                                     book.year.takeIf { it.isNotBlank() },
-                                ).joinToString(" · ").ifBlank { "（没有作者和年份）" },
+                                ).joinToString(" · ").ifBlank { noAuthorYear },
                                 style = MaterialTheme.typography.bodySmall,
                             )
                         }
@@ -305,15 +325,15 @@ fun SettingsScreen(
                 }
             }
 
-            Section("输出格式", collapsed, ::toggle) {
+            Section(SettingsSection.Formats, collapsed, ::toggle) {
                 Field(
-                    "默认格式模板",
+                    stringResource(R.string.settings_default_format),
                     settings.template,
                     onTemplate,
-                    "占位符：" + Template.placeholders.joinToString(" ") { "{$it}" },
+                    stringResource(R.string.settings_placeholders_prefix) + Template.placeholders.joinToString(" ") { "{$it}" },
                     singleLine = false,
                 )
-                Field("标签", settings.tags, onTags)
+                Field(stringResource(R.string.settings_tags), settings.tags, onTags)
                 FormatsSection(
                     formats = state.formats,
                     onSave = onSaveFormat,
@@ -321,55 +341,67 @@ fun SettingsScreen(
                 )
             }
 
-            Section("写入方式", collapsed, ::toggle) {
+            Section(SettingsSection.WriteMode, collapsed, ::toggle) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onClick = { onMode(WriteMode.ADVANCED) }) {
                         Text(if (settings.mode == WriteMode.ADVANCED) "● Advanced URI" else "○ Advanced URI")
                     }
                     OutlinedButton(onClick = { onMode(WriteMode.OFFICIAL) }) {
-                        Text(if (settings.mode == WriteMode.OFFICIAL) "● 官方 URI" else "○ 官方 URI")
+                        Text(
+                    stringResource(
+                        if (settings.mode == WriteMode.OFFICIAL) R.string.settings_mode_official_on
+                        else R.string.settings_mode_official_off
+                    )
+                )
                     }
                 }
                 Text(
                     if (settings.mode == WriteMode.ADVANCED) {
-                        "能定位到指定小节，需要装 Advanced URI 插件。"
+                        stringResource(R.string.settings_mode_advanced_hint)
                     } else {
-                        "不需要插件，但只能追加到文件末尾，无法指定小节。"
+                        stringResource(R.string.settings_mode_official_hint)
                     },
                     style = MaterialTheme.typography.bodySmall,
                 )
-                Toggle("写入后返回来源 App", settings.returnToSource, onReturnToSource)
+                Toggle(
+                    stringResource(R.string.settings_return_to_source),
+                    settings.returnToSource,
+                    onReturnToSource,
+                )
                 Text(
-                    "不勾选时，Obsidian 会打开刚写入的那篇笔记并停在那里。" +
-                        "勾上就立刻回到你分享的地方。",
+                    stringResource(R.string.settings_return_to_source_hint),
                     style = MaterialTheme.typography.bodySmall,
                 )
-                Toggle("打开 App 时自动读取剪贴板", settings.autoReadClipboard, onAutoReadClipboard)
+                Toggle(
+                    stringResource(R.string.settings_read_clipboard_on_open),
+                    settings.autoReadClipboard,
+                    onAutoReadClipboard,
+                )
                 Text(
-                    "从桌面或磁贴打开时覆盖当前内容；由分享进入时不受影响。",
+                    stringResource(R.string.settings_read_clipboard_hint),
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
 
-            Section("清洗流水线", collapsed, ::toggle) {
+            Section(SettingsSection.Cleanup, collapsed, ::toggle) {
                 val cleanup = settings.cleanup
-                Toggle("归一化换行与不可见字符", cleanup.normalize) { onCleanup(cleanup.copy(normalize = it)) }
-                Toggle("按来源规则去杂质", cleanup.stripBoilerplate) { onCleanup(cleanup.copy(stripBoilerplate = it)) }
-                Toggle("删除只有链接的行", cleanup.stripLoneUrlLines) { onCleanup(cleanup.copy(stripLoneUrlLines = it)) }
-                Toggle("删除「说明文字＋链接」的尾行", cleanup.dropLinkFooterLines) {
+                Toggle(stringResource(R.string.cleanup_normalise), cleanup.normalize) { onCleanup(cleanup.copy(normalize = it)) }
+                Toggle(stringResource(R.string.cleanup_strip), cleanup.stripBoilerplate) { onCleanup(cleanup.copy(stripBoilerplate = it)) }
+                Toggle(stringResource(R.string.cleanup_lone_urls), cleanup.stripLoneUrlLines) { onCleanup(cleanup.copy(stripLoneUrlLines = it)) }
+                Toggle(stringResource(R.string.cleanup_link_footer), cleanup.dropLinkFooterLines) {
                     onCleanup(cleanup.copy(dropLinkFooterLines = it))
                 }
-                Toggle("合并被硬换行截断的句子", cleanup.unwrapLines) { onCleanup(cleanup.copy(unwrapLines = it)) }
-                Toggle("压缩连续空行", cleanup.collapseBlankLines) { onCleanup(cleanup.copy(collapseBlankLines = it)) }
-                Toggle("包成引用块", cleanup.wrapQuote) { onCleanup(cleanup.copy(wrapQuote = it)) }
-                Toggle("包成 ==高亮==（在引用块内）", cleanup.wrapHighlight) { onCleanup(cleanup.copy(wrapHighlight = it)) }
+                Toggle(stringResource(R.string.cleanup_unwrap), cleanup.unwrapLines) { onCleanup(cleanup.copy(unwrapLines = it)) }
+                Toggle(stringResource(R.string.cleanup_blank_runs), cleanup.collapseBlankLines) { onCleanup(cleanup.copy(collapseBlankLines = it)) }
+                Toggle(stringResource(R.string.cleanup_quote), cleanup.wrapQuote) { onCleanup(cleanup.copy(wrapQuote = it)) }
+                Toggle(stringResource(R.string.cleanup_highlight), cleanup.wrapHighlight) { onCleanup(cleanup.copy(wrapHighlight = it)) }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("默认规则", modifier = Modifier.weight(1f))
+                    Text(stringResource(R.string.settings_default_profile), modifier = Modifier.weight(1f))
                     OutlinedButton(onClick = { profileMenu = true }) {
                         Text(
                             state.availableProfiles.firstOrNull { it.id == settings.defaultProfileId }?.label
-                                ?: "通用"
+                                ?: stringResource(R.string.profile_generic)
                         )
                     }
                     DropdownMenu(expanded = profileMenu, onDismissRequest = { profileMenu = false }) {
@@ -384,10 +416,13 @@ fun SettingsScreen(
                         }
                     }
                 }
-                Text("认不出来源的分享用这套规则。", style = MaterialTheme.typography.bodySmall)
+                Text(
+                    stringResource(R.string.settings_default_profile_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                )
             }
 
-            Section("自定义规则", collapsed, ::toggle) {
+            Section(SettingsSection.CustomRules, collapsed, ::toggle) {
                 RulesSection(
                     userProfiles = state.userProfiles,
                     placeholderTemplate = settings.template,
@@ -396,7 +431,7 @@ fun SettingsScreen(
                 )
             }
 
-            Section("按 App 指定规则", collapsed, ::toggle) {
+            Section(SettingsSection.AppRules, collapsed, ::toggle) {
                 AppProfileSection(
                     installedApps = state.installedApps,
                     mappings = state.appMappings,
@@ -406,81 +441,78 @@ fun SettingsScreen(
                 )
             }
 
-            Section("记录", collapsed, ::toggle) {
+            Section(SettingsSection.Records, collapsed, ::toggle) {
                 OutlinedButton(onClick = onOpenHistory, modifier = Modifier.fillMaxWidth()) {
-                    Text("发送历史（${state.history.size} 条）")
+                    Text(stringResource(R.string.settings_history_button, state.history.size))
                 }
                 Text(
-                    "发送失败的条目会进待发队列。为避免打扰，只在你打开本 App 时重发 —— " +
-                        "Android 不允许后台启动 Obsidian。",
+                stringResource(R.string.settings_outbox_hint),
                     style = MaterialTheme.typography.bodySmall,
                 )
-                Button(onClick = onRetryOutbox) { Text("立即重发待发队列") }
+                Button(onClick = onRetryOutbox) { Text(stringResource(R.string.settings_retry_now)) }
             }
-            Section("实验功能", collapsed, ::toggle) {
+            Section(SettingsSection.Experimental, collapsed, ::toggle) {
                 Text(
-                    "为了绕开 Kindle 的分享与复制限制：它在阅读界面禁止选择长段落，所以整段分享和" +
-                        "复制都会失败；而「注解」页把每条划线当普通文字放进无障碍树，直接读它就行 —— " +
-                        "不需要选择，也不需要剪贴板。",
+                    stringResource(R.string.settings_experimental_intro),
                     style = MaterialTheme.typography.bodySmall,
                 )
                 Text(
-                    "实验功能：判据是按屏幕结构写的，Kindle 改版后可能失效，所以抓到的结果一律先" +
-                        "给你过一遍再写。",
+                    stringResource(R.string.settings_experimental_warning),
                     style = MaterialTheme.typography.bodySmall,
                 )
                 // A finished run has to be reachable without the notification: missing it
                 // meant the highlights sat in storage with nothing pointing at them.
                 if (state.pendingImportCount > 0) {
                     Text(
-                        "上次抓到的还在等着检查。",
+                        stringResource(R.string.settings_pending_import),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.primary,
                     )
                     Button(onClick = onOpenPendingImport) {
-                        Text("检查上次抓到的 ${state.pendingImportCount} 条")
+                        Text(stringResource(R.string.settings_open_pending, state.pendingImportCount))
                     }
                 }
                 when (collectorStatus) {
                     CollectorStatus.Running -> {
                         Text(
-                            "已就绪。在 Kindle 里打开这本书的注解页，点下面的按钮，它会自己读完。",
+                            stringResource(R.string.settings_collector_ready),
                             style = MaterialTheme.typography.bodySmall,
                         )
-                        Button(onClick = onArmKindleImport) { Text("开始抓取") }
+                        Button(onClick = onArmKindleImport) {
+                        Text(stringResource(R.string.settings_start_collect))
+                    }
                     }
 
                     // Cost the most time of anything here: the switch looks on while
                     // nothing is listening, so the only fix is to toggle it off and back on.
                     CollectorStatus.EnabledNotRunning -> {
                         Text(
-                            "系统里显示已开启，但服务其实没在运行（在小米系统上见过）。" +
-                                "把那个开关关掉再打开一次就好。",
+                        stringResource(R.string.settings_collector_not_running),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.error,
                         )
                         OutlinedButton(onClick = onOpenAccessibilitySettings) {
-                            Text("去无障碍设置里重开一次")
+                            Text(stringResource(R.string.settings_open_accessibility))
                         }
                     }
 
                     CollectorStatus.NotEnabled -> {
                         Text(
-                            "服务还没开。路径：系统设置 → 无障碍 → 「已下载的服务」" +
-                                "（部分机型叫「已安装的服务」）→ 找到「从 Kindle 的注解页收集划线」" +
-                                "→ 打开，并在弹窗里点「允许」。" +
-                                "注意不是页面顶部的「无障碍快捷方式」，那个是给快捷键用的。",
+                        stringResource(R.string.settings_collector_off),
                             style = MaterialTheme.typography.bodySmall,
                         )
                         OutlinedButton(onClick = onOpenAccessibilitySettings) {
-                            Text("去开启无障碍权限")
+                            Text(stringResource(R.string.settings_enable_accessibility))
                         }
                     }
                 }
-                Toggle("抓取后直接写入，不过一遍", settings.autoWriteImports, onAutoWriteImports)
+                Toggle(
+                    stringResource(R.string.settings_auto_write_imports),
+                    settings.autoWriteImports,
+                    onAutoWriteImports,
+                )
                 Text(
-                    "默认关。Kindle 会把长划线折叠，折叠后的样子和短划线一模一样 —— " +
-                        "开了就直接写，被折叠过的和被写过的仍然会留着让你确认。",
+                    stringResource(R.string.settings_auto_write_hint),
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
@@ -489,43 +521,56 @@ fun SettingsScreen(
     }
 }
 
-/** Every section, so all of them can start folded. */
-private val SECTION_TITLES = listOf(
-    "写入目标",
-    "目的地",
-    "书籍",
-    "输出格式",
-    "写入方式",
-    "清洗流水线",
-    "自定义规则",
-    "按 App 指定规则",
-    "记录",
-    "实验功能",
-)
+/**
+ * A section, so all of them can start folded.
+ *
+ * The fold state is keyed on the enum, never on the label: keying it on display text would
+ * silently reset every fold the moment the device language changed.
+ */
+private enum class SettingsSection(val labelRes: Int) {
+    WriteTarget(R.string.section_write_target),
+    Destinations(R.string.section_destinations),
+    Books(R.string.section_books),
+    Formats(R.string.section_formats),
+    WriteMode(R.string.section_write_mode),
+    Cleanup(R.string.section_cleanup),
+    CustomRules(R.string.section_custom_rules),
+    AppRules(R.string.section_app_rules),
+    Records(R.string.section_records),
+    Experimental(R.string.section_experimental),
+}
 
 /** A section whose body hides behind its title, so a long screen stays scannable. */
 @Composable
 private fun Section(
-    title: String,
+    section: SettingsSection,
     collapsed: List<String>,
-    onToggle: (String) -> Unit,
+    onToggle: (SettingsSection) -> Unit,
     content: @Composable () -> Unit,
 ) {
+    val key = section.name
+    val folded = key in collapsed
     HorizontalDivider()
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onToggle(title) }
+            .clickable { onToggle(section) }
             .padding(vertical = 8.dp),
     ) {
-        Text(title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+        Text(
+            stringResource(section.labelRes),
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.weight(1f),
+        )
         Icon(
-            imageVector = if (title in collapsed) Icons.Filled.KeyboardArrowDown else Icons.Filled.KeyboardArrowUp,
-            contentDescription = if (title in collapsed) "展开" else "收起",
+            imageVector = if (folded) Icons.Filled.KeyboardArrowDown else Icons.Filled.KeyboardArrowUp,
+            contentDescription = stringResource(
+                if (folded) R.string.action_expand else R.string.action_collapse
+            ),
         )
     }
-    if (title !in collapsed) {
+    if (!folded) {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) { content() }
     }
 }
