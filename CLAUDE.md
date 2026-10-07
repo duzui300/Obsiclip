@@ -131,8 +131,45 @@ definition. That is why adopting the clipboard overwrites rather than refusing t
 what is there. Note that re-entering from the launcher while alive arrives via
 `onNewIntent`, not `onCreate` — the tile and the icon each need their own path.
 
+## The Kindle collector
+
+Kindle refuses to let a long passage be selected in the reading view, which is why sharing
+one and copying one both fail. The notebook screen is the only place it leaves them
+reachable: each highlight sits in the accessibility tree as plain text, so reading that tree
+sidesteps the restriction rather than working around it.
+
+Three things it cost to learn, all found by using it rather than by reading it:
+
+- **Never read the window tree from `onAccessibilityEvent`.** That callback runs on the
+  service's main thread and fires constantly, and a tree read is a blocking round trip that
+  waits on the observed app — out to the full timeout when the window on top is not one the
+  service may read. The log showed five-second gaps between events, and the whole
+  accessibility pipeline stalled. Only the event's own fields belong in that callback; the
+  tree work goes to a background thread, throttled.
+- **"Switched on" is not "running".** Seen here: the enabled-services setting listed the
+  service while `dumpsys accessibility` reported `Bound services:{}` — on paper only, with
+  every arming silently doing nothing. Hence `CollectorStatus` with three states rather than
+  a boolean: a boolean can only answer this wrongly, and telling the user to flip a switch
+  that already looks on wasted the most time of anything in this feature.
+- **A finished run is reachable only by notification** unless something else points at it.
+  Missing the notification left the highlights in storage with nothing leading to them, so
+  the settings section names the pending run too.
+
+Two more, about intents: the collection notification's intent is an `ACTION_MAIN` with no
+text, which is exactly what a launcher tap looks like — it has to be checked before the
+launcher branch, or it is swallowed. And finishing an activity with nothing to go back to
+drops the user on the launcher, so a write with no source app (clipboard, tile, batch) must
+clear any remembered source and must only close if something actually opened.
+
+Identification is structural, never by wording — Kindle's UI strings are localised. A quote
+is the longest leaf text; the notebook is a scrollable list carrying several of them. The
+Activity's class name starts a run, because that is code rather than text. A scroll that
+refuses is the end of a list, not a failure to drive it.
+
 ## Known gaps
 
+- The collector's heuristics are unverified against a short-highlight notebook: a quote
+  shorter than the length floor would be missed silently, and the floor is a guess.
 - No rule preview: the settings editor cannot replay a sample share through the rules.
 - `x-success` is used only to return the user to the source app; it is not treated as a
   write receipt, for the reason above.
