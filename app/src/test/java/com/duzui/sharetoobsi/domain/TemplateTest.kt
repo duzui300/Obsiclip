@@ -17,6 +17,15 @@ class TemplateTest {
     }
 
     @Test
+    fun `drops the title brackets along with an empty title`() {
+        val rendered = Template.render(
+            "> — {author}《{title}》{year} {tags}",
+            TemplateValues(text = "x", tags = "#reading"),
+        )
+        assertEquals("> — #reading", rendered)
+    }
+
+    @Test
     fun `drops the attribution line when there is nothing left on it`() {
         assertEquals("> 引用", Template.render(sourceLine, TemplateValues(text = "> 引用")))
     }

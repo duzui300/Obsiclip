@@ -14,6 +14,12 @@ object Defaults {
     /** The vault's default folder for unsorted capture. */
     const val INBOX_PATH = "00-Inbox"
 
+    /**
+     * Where captures go when no book has been named. A rolling note rather than
+     * `00-Inbox/_index.md`, which is a landing page with live query blocks in it.
+     */
+    const val INBOX_NOTE = "00-Inbox/摘录.md"
+
     const val TAGS = "#reading"
 
     /**
