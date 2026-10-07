@@ -85,25 +85,36 @@ domain/     pure Kotlin, no Android — the whole pipeline, covered by JVM tests
   UserProfile    compiles the rules a user wrote, naming the ones that do not parse
 send/       ObsidianSender: dispatch, clipboard fallback above 16k chars, failure kinds
             ShareShortcuts: pushes saved targets as Direct Share targets
-data/       Room (targets/profiles/app_profiles/history/outbox) + DataStore (settings)
+data/       Room (targets/formats/profiles/app_profiles/history/outbox) + DataStore
 ui/         Compose: ShareScreen, SettingsScreen, AddTargetDialog, ProfileEditorDialog,
-            HistoryScreen, QuoteTileService
+            SettingsFormats, HistoryScreen, Reorderable, QuoteTileService
 ```
 
 `domain/` deliberately has no Android dependency. Keep it that way — it is why the
 pipeline is testable without a device.
 
-**A book is a target, not its own concept.** Its author and year exist only to fill the
-`{author}` and `{year}` placeholders for that book's quotes, so they live on the target
-row. The book name is never inferred from the share text: one misread title files a
-highlight into a new note beside the one it belongs in, and the right target is usually
-already saved.
+**A target is the only destination concept.** A book, the inbox, or any other note are all
+just rows in `targets`, ordered by one `sortOrder` column that the chip row and the
+settings list both read — which is why they cannot drift apart. Consequences worth
+keeping: the book name is never inferred from the share text (one misread title files a
+highlight into a new note beside the one it belongs in), and the inbox is seeded once but
+never restored when missing, because putting it back after the user deleted it would be
+overriding them.
+
+**Output template precedence, most specific first:** the target's chosen format, then the
+rule set's own template, then the default. The target wins because it knows the vault's
+convention for that note; the rule set only knows the shape of what comes in.
 
 **Migrations are hand-written.** Room validates the live schema against the entities on
 open, so a hand-written `CREATE TABLE` that differs by a column default crashes at
 runtime. The two things that bite: a non-null column with no `@ColumnInfo(defaultValue)`
 must be created without `DEFAULT`, and `ALTER TABLE ADD COLUMN` on a non-null column
 *requires* one. Check on a device — a unit test cannot see this.
+
+**The app outlives a write**, so anything still on screen when it is reopened is stale by
+definition. That is why adopting the clipboard overwrites rather than refusing to replace
+what is there. Note that re-entering from the launcher while alive arrives via
+`onNewIntent`, not `onCreate` — the tile and the icon each need their own path.
 
 ## Known gaps
 
