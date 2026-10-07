@@ -27,6 +27,15 @@ class KindleImportStore(context: Context) {
     private val prefs = context.applicationContext
         .getSharedPreferences("kindle_import", Context.MODE_PRIVATE)
 
+    /**
+     * Set by the service while it is connected. The app uses it to tell whether the
+     * collector is really running — on some ROMs the system setting is not readable by
+     * third-party apps, so believing it would mean never showing the feature as ready.
+     */
+    var connected: Boolean
+        get() = prefs.getBoolean(KEY_CONNECTED, false)
+        set(value) = prefs.edit().putBoolean(KEY_CONNECTED, value).apply()
+
     /** Set by the app, cleared once the collection finishes or is abandoned. */
     var armed: Boolean
         get() = prefs.getBoolean(KEY_ARMED, false)
@@ -99,6 +108,7 @@ class KindleImportStore(context: Context) {
     }
 
     private companion object {
+        const val KEY_CONNECTED = "connected"
         const val KEY_ARMED = "armed"
         const val KEY_FINISHED = "finished"
         const val KEY_AUTO = "autoScrolled"

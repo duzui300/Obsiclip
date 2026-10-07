@@ -5,6 +5,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.os.Build
+import android.os.SystemClock
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.core.app.NotificationCompat
@@ -41,10 +42,17 @@ class KindleNotebookService : AccessibilityService() {
 
     private var running = false
     private var notebookSeen = false
+    private var lastAttemptAt = 0L
 
     override fun onServiceConnected() {
         super.onServiceConnected()
         store = KindleImportStore(this)
+        store.connected = true
+    }
+
+    override fun onUnbind(intent: android.content.Intent?): Boolean {
+        store.connected = false
+        return super.onUnbind(intent)
     }
 
     override fun onInterrupt() = Unit
@@ -58,28 +66,37 @@ class KindleNotebookService : AccessibilityService() {
         event ?: return
         if (event.packageName?.toString() != KINDLE_PACKAGE) return
 
-        val className = event.className?.toString().orEmpty()
-        val isWindowChange = event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
-
-        // The Activity's class name is code rather than UI text, so it survives a change of
-        // language. Watching for it also means the user opening the notebook is what starts
-        // a run, without them having to do anything else.
-        if (isWindowChange) {
-            notebookSeen = className.contains(NOTEBOOK_CLASS, ignoreCase = true)
+        if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+            notebookSeen = event.className?.toString()
+                ?.contains(NOTEBOOK_CLASS, ignoreCase = true) == true
         }
 
-        if (!store.armed || running) return
-        if (!notebookSeen && !looksLikeNotebook(rootInActiveWindow)) return
+        // Deliberately cheap: this callback runs on the service's main thread and fires
+        // constantly. Reading the window tree is a blocking round trip that waits on the
+        // observed app — and when the window on top is not one this service may read, it
+        // waits out the full timeout. Doing that here stalls the whole accessibility
+        // pipeline, which is what made the device feel stuck.
+        if (!store.armed || running || !notebookSeen) return
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastAttemptAt < ATTEMPT_INTERVAL_MS) return
+        lastAttemptAt = now
 
-        store.armed = false
         running = true
         scope.launch {
-            val droveItself = runCollection()
-            val items = collected.values.toList()
-            collected.clear()
-            running = false
-            store.publish(items, autoScrolled = droveItself)
-            notifyFinished(items.size, droveItself)
+            try {
+                val root = rootInActiveWindow
+                if (root == null || !looksLikeNotebook(root)) return@launch
+
+                // Committed: from here the run owns the arming flag.
+                store.armed = false
+                val droveItself = runCollection()
+                val items = collected.values.toList()
+                collected.clear()
+                store.publish(items, autoScrolled = droveItself)
+                notifyFinished(items.size, droveItself)
+            } finally {
+                running = false
+            }
         }
     }
 
@@ -90,6 +107,7 @@ class KindleNotebookService : AccessibilityService() {
         var lastSignature = ""
         var stablePasses = 0
         var passes = 0
+        var scrolled = false
 
         while (passes < MAX_PASSES) {
             passes++
@@ -106,10 +124,16 @@ class KindleNotebookService : AccessibilityService() {
                 lastSignature = signature
             }
 
-            val scrollable = findScrollable(root) ?: return false
-            val scrolled = scrollable.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
-            if (!scrolled) return false
-            delay(SCROLL_SETTLE_MS)
+            val scrollable = findScrollable(root) ?: return scrolled
+            if (scrollable.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)) {
+                scrolled = true
+                delay(SCROLL_SETTLE_MS)
+            } else {
+                // A scroll that refuses is what the end of a list looks like, not a failure
+                // to drive it. Reporting it as failure told the user to scroll by hand
+                // after the list had already been read to the bottom.
+                return scrolled
+            }
         }
         return true
     }
@@ -270,6 +294,8 @@ class KindleNotebookService : AccessibilityService() {
         const val SEARCH_DEPTH = 4
         const val MAX_PASSES = 60
         const val SCROLL_SETTLE_MS = 350L
+        /** Floor between tree reads, so a burst of events cannot pile them up. */
+        const val ATTEMPT_INTERVAL_MS = 800L
 
         const val CHANNEL_ID = "kindle_import"
         const val NOTIFICATION_ID = 4711
