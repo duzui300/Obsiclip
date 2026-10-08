@@ -2,23 +2,28 @@
 
 > **English** · [中文](README.zh.md)
 
-An Android share target: share a highlight from any app, and it is cleaned, run through a
-template, and appended to a named note in your Obsidian vault.
+An Android share target for **any app**: share a highlight or a whole note, and it is
+cleaned, run through a template, and appended to the note you chose in your Obsidian vault —
+in the section you chose within it.
 
-Built for one real workflow: **highlight a line in Kindle → share → it lands under
-`## Quotes worth keeping` in the right book note**, without typing anything.
+Anything that can share text works: reading apps (Readest, Kindle, 微信读书), note apps,
+browsers, chat. So does the「Process text」item in the text-selection toolbar, which covers
+text you *selected* rather than shared. Obsidian's own share target can only drop a new
+note in a vault; this decides *which* note, *which* section, and *what shape*.
+
+**Kindle is the one app that needed extra work**, because it refuses to share or copy a long
+passage at all — see [the clipboard routes](#when-a-share-sheet-refuses-common-with-kindle)
+and [reading its notebook screen](#experimental-importing-from-kindles-notebook-screen).
+Those are additions for one app's restrictions, not the shape of the rest.
+
+The interface is **English and 简体中文** — it follows the device language, and
+**Settings → Language** overrides that. This file is [also available in Chinese](README.zh.md);
+the link at the top switches.
 
 ## What it does
 
-A Kindle share looks like this:
-
-```
-我在 平野啓一郎 所著的《本心 (Japanese Edition)》中讀到以下這段引述時，就想到您：
-「僕にはまだ、お母さんが必要なんだよ。」
-開始免費閱讀這本書：https://read.amazon.co.jp/kp/kshare?asin=B092J53NPG&ref_=kar_wh_ca
-```
-
-The app:
+Reading apps wrap a highlight in their own boilerplate: a share preamble, a store link, a
+"read more" line. The app:
 
 1. **Strips the wrapping** — the share preamble, the store link, any line that is nothing
    but a URL, and "label + link" footers. Only the quote survives.
@@ -121,6 +126,8 @@ Sections fold away behind their titles, all collapsed by default.
   like one that works.
 - **Per-app rules** — pin a source app to a rule set. Precedence: pinned, then package match,
   then default.
+- **Language** — Follow system, English, or 简体中文. Takes effect immediately; a capture in
+  progress survives the switch.
 - **History** — what was sent, where it landed, whether it worked, and a re-send.
 
 > **A write leaves you on the note.** Obsidian is always pulled forward — a URI can only be
